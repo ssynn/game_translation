@@ -1,0 +1,4 @@
+input/*
+output/*
+intermediate_file/*
+__pycache__
