@@ -41,13 +41,16 @@ def translate(text, to='zhs', fr='ja'):
             result = json.loads(res.text)['data']['target_text']
             return result
         else:
-            derror('error')
             return ''
     except Exception as e:
         print(e)
         pass
     else:
         pass
+
+def translate_test(data: str):
+    return 'translated:' + data
+
 
 if __name__ == "__main__":
     text = u"高校一年生の桜庭理沙は平均的な少女。 ある日拾ったカードの力により魔法少女となり戦うお話"

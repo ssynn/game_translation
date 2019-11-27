@@ -1,4 +1,5 @@
 input/*
 output/*
+history/*
 intermediate_file/*
 __pycache__
