@@ -54,4 +54,4 @@ def translate_test(data: str):
 
 if __name__ == "__main__":
     text = u"高校一年生の桜庭理沙は平均的な少女。 ある日拾ったカードの力により魔法少女となり戦うお話"
-    print(translate(text))
+    print(translate('〈横山〉：いつも通りゴルフ帰りからの流れでした。 '))

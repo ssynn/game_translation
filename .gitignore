@@ -1,5 +1,11 @@
 input/*
 output/*
-history/*
+history
 intermediate_file/*
+data/*
+Encrypt&Decrypt/*.dsm
+Encrypt&Decrypt/*.xp3
+Encrypt&Decrypt/*.txt
+baidufanyi.py
+tencentfanyi.py
 __pycache__
