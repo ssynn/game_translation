@@ -7,4 +7,4 @@ a = '【亮介】あ、お疲れさまですゲンさん。'
 
 a = a.replace('\n', '')
 a = a.replace('　', '')
-print re.
+print('你好'.encode('gbk'))

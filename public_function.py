@@ -406,7 +406,7 @@ def split_line(text: str) -> list:
     '''
     用正则表达式切割文本，遇到'「', '」', '…', '。', '，', '―', '”', '“', '☆', '♪', '、', '‘', '’', '』', '『', '　', 
     '''
-    split_str = r'\[.*?\]|<.+?>|「|」|…+|。|』|『|　|―+|）|（|・|？|！|★|☆|♪|※|\\|“|”|"|\]|\[|\/|\;|【|】'
+    split_str = r'\[.*?\]|<.+?>|,|\\n|「|」|…+|。|』|『|　|―+|）|（|・|？|！|★|☆|♪|※|\\|“|”|"|\]|\[|\/|\;|【|】'
     _text_list = re.split(split_str, text)
     _ans = []
     for i in _text_list:
@@ -1187,20 +1187,23 @@ def replace_string(data:bytes, jp_chs:dict):
                 return True
         return False
     def _extract_button(data:bytes):
+        '''
+        抽取 M开头且带引号且含日文的字符串
+        '''
         ans = ''
         p = -1
         try:
-            if data[-1] != 34 or data[0] != 77:
+            if data[0] != 77 and data.count(0x22)!=2:
                 ans = ''
                 raise Exception()
-            p = data.find(0x22)
-            _str = data[p+1:-1].decode('shiftjis')
-            if p!=-1 and _has_jp(_str) and _str[0] not in '■◆':
+            _len = int.from_bytes(data[1:3], byteorder='little')
+            _str = data[4:-1].decode('shiftjis')
+            if _len and _has_jp(_str) and _str[0] not in '■◆':
                 ans = _str
         except Exception as e:
             ans=''
         finally:
-            return ans, p
+            return ans
 
     header = create_head_ystb(data)
     if not data or not header:
@@ -1230,14 +1233,15 @@ def replace_string(data:bytes, jp_chs:dict):
                 cnt += 1
             else:
                 faild.append(_key)
-        _key, _p = _extract_button(_para['str'])
+        _key = _extract_button(_para['str'])
         if _key:
             # print(_key, key in jp_chs)
             if _key in jp_chs and jp_chs[_key]:
-                _para['str'] = bytearray(_para['str'])
-                _para['str'][_p+1:-1] = jp_chs[_key].encode('gbk',errors='ignore')
-                _para['str'] = bytes(_para['str'])
+                _str = b'\x22'+jp_chs[_key].encode('gbk',errors='ignore')+b'\x22'
+                _para['str'] = b'\x4d' + int.to_bytes(len(_str), 2, byteorder='little')
+                _para['str'] += _str
                 _para['char_count_32'] = len(_para['str'])
+                # print(_para['str'])
                 cnt += 1
             else:
                 faild.append(_key)
@@ -1331,7 +1335,7 @@ def output_ybn(_input='input', output='output',jp_chs='intermediate_file/jp_chs.
     '''
     faild = []
     file_all = os.listdir(_input)
-    jp_chs = load_json(jp_chs)
+    jp_chs = open_json(jp_chs)
     for f in file_all:
         _t = replace_string(open_file_b(f'{_input}/{f}'), jp_chs)
         faild+=_t[-1]
@@ -1355,8 +1359,216 @@ def output_ybn(_input='input', output='output',jp_chs='intermediate_file/jp_chs.
 
 
 
+
+# .srp
+'''
+从srp文件中提取日文，并进行一定的处理，使得与vnr一致
+'''
+def extract_srp():
+    '''
+    ,[os].+」\n -> \n
+    <.+?>       -> ''
+    \\n         -> ''
+    '　'        -> ''
+    '''
+    file_all = os.listdir('input')
+    ans = []
+    for f in file_all:
+        if f[0]!='0':
+            continue
+        f_data = open_file_b(f'input/{f}')
+        f_data = f_data[0xc:]
+        cnt = 0
+        cnt2 = 0
+        while len(f_data):
+            _len = int.from_bytes(f_data[:2], byteorder='little')
+            _str = f_data[2:2+_len]
+            if _str[:2] == b'\x00\x00':
+                _str = _str[4:].decode('cp932')
+                # if _str.find('】,') != -1:
+                #     _str = _str.replace('】,', '】「')
+                #     _str += '」'
+                #     _str = _str.replace(r'\\n', '')
+                ans.append(_str)
+                cnt2 += 1
+            # elif _str[4:] in (b'\x81\x75', b'\x81\x76', b'\x81\64'):
+            #     print(_str[4:].decode('cp932'),333333333333)
+            f_data = f_data[2+_len:]
+            cnt += 1
+        print(f, cnt, cnt2)
+    save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
+
+
+def replace_srp():
+    def _formate(s:str):
+        count = s.count(',')
+        if count == 0:
+            return '　'+s
+        else:
+            _t = s.split(',')
+            _t[1] = '「'+_t[1]+'」'
+            return ','.join(_t)
+    file_all = os.listdir('input')
+    jp_chs = open_json('intermediate_file/jp_chs.json')
+    cnt_all = 0
+    faild = []
+    for f in file_all:
+        f_data = open_file_b(f'input/{f}')
+        if f[0]!='0':
+            save_file_b(f'output/{f}', f_data)
+            continue
+        f_data = open_file_b(f'input/{f}')
+        ans_data = f_data[:0xc]
+        f_data = f_data[0xc:]
+        cnt = 0
+
+        while len(f_data):
+            _len = int.from_bytes(f_data[:2], byteorder='little')
+            _str = f_data[2:2+_len]
+            if _str[:2] == b'\x00\x00':
+                key = _str[4:].decode('cp932')
+                if key in jp_chs and jp_chs[key]:
+                    chs = _formate(jp_chs[key])
+                    chs = chs.encode('gbk', errors='ignore')
+                    ans_data += int.to_bytes(len(chs)+4,2, byteorder='little')
+                    ans_data += _str[:4]
+                    ans_data += chs
+                    cnt += 1
+                    cnt_all += 1
+                else:
+                    faild.append(key)
+            else:
+                ans_data += f_data[:2+_len]
+            f_data = f_data[2+_len:]
+        print(f, cnt)
+        save_file_b(f'output/{f}', ans_data)
+    print('总共替换：', cnt_all)
+    save_json('intermediate_file/faild.json', faild)
+
+
+def extract_pac(path: str, decode=True):
+    def delete_zero(name: bytes):
+        while not name[-1]:
+            name = name[:-1]
+        return name.decode()
+
+    def rot_byte_r(data: bytes, count: int):
+        # print(data)
+        count &= 7
+        return data >> count | (data << (8-count)) & 0xff
+
+    def decode_srp(data: bytes):
+        # print(len(data))
+        data = bytearray(data)
+        record_count = int.from_bytes(data[:4], byteorder='little')
+        pos = 4
+        for j in range(record_count):
+            chunk_size = int.from_bytes(data[pos:pos+2], byteorder='little')-4
+            pos += 6
+            if pos + chunk_size > len(data):
+                return data
+            for i in range(chunk_size):
+                if pos >= len(data):
+                    print(pos, len(data), chunk_size)
+                data[pos] = rot_byte_r(data[pos], 4)
+                pos += 1
+        return data
+
+    data = open_file_b(path)
+    count = int.from_bytes(data[:2], byteorder='little')
+    name_length = int.from_bytes(data[2:3], byteorder='little')
+    data_offset = int.from_bytes(data[3:7], byteorder='little')
+    version = 2
+    index_offset = 7
+    dir_name = os.path.splitext(path)[0]
+
+    if not os.path.exists('input'):
+        os.mkdir('input')
+
+    for i in range(count):
+        name = data[index_offset:index_offset+name_length]
+        index_offset += name_length
+
+        _entry_offset = int.from_bytes(
+            data[index_offset:index_offset+8],
+            byteorder='little'
+        ) + data_offset
+
+        _entry_size = int.from_bytes(
+            data[index_offset+8:index_offset+12],
+            byteorder='little'
+        )
+
+        index_offset += 12
+
+        _entry_data = data[_entry_offset:_entry_offset+_entry_size]
+        if decode:
+            _entry_data = decode_srp(_entry_data)
+        save_file_b(f'input/{delete_zero(name)}', _entry_data)
+
+
+def repack_pac(path='output', encode=True, name_length=0xb):
+    def rot_byte_r(data: bytes, count: int):
+        # print(data)
+        count &= 7
+        return data >> count | (data << (8-count)) & 0xff
+
+    def decode_srp(data: bytes):
+        # print(len(data))
+        data = bytearray(data)
+        record_count = int.from_bytes(data[:4], byteorder='little')
+        pos = 4
+        for j in range(record_count):
+            chunk_size = int.from_bytes(data[pos:pos+2], byteorder='little')-4
+            pos += 6
+            if pos + chunk_size > len(data):
+                return data
+            for i in range(chunk_size):
+                if pos >= len(data):
+                    print(pos, len(data), chunk_size)
+                data[pos] = rot_byte_r(data[pos], 4)
+                pos += 1
+        return data
+
+    file_all = os.listdir(path)
+    count = int.to_bytes(len(file_all), 2, byteorder='little')
+    n_length = int.to_bytes(name_length, 1, byteorder='little')
+    index_offset = 7 + (name_length+12)*len(file_all)
+    data_offset = int.to_bytes(index_offset, 4, byteorder='little')
+    ans = count+n_length+data_offset
+    entry_all = b''
+    data_all = b''
+    for f in file_all:
+        _entry_data = open_file_b(f'{path}/{f}')
+        name = f.encode()
+
+        while len(name) < 0xb:
+            name+=b'\x00'
+
+        _entry_offset = int.to_bytes(
+            len(data_all),
+            8,
+            byteorder='little'
+        )
+
+        _entry_size = int.to_bytes(
+            len(_entry_data),
+            4,
+            byteorder='little'
+        )
+
+        entry_all += (name+_entry_offset+_entry_size)
+        if encode:
+            _entry_data = decode_srp(_entry_data)
+        data_all += _entry_data
+    save_file_b(f"{path}.pac",ans+entry_all+data_all)
+
+
 if __name__ == "__main__":
-    _text = '「んぐっ、んぐっ、んぐっ、んぐっ、んぐっ、んぐっ、んぐっ………ブフゥーーッッ！　ゲホゲホッ！　はぁっ！　はぁはぁっ！　ゲホゲホッ……！」'
-    print(delete_label(_text))
-    print(split_line(delete_label(_text)))
+    # _text = '「んぐっ、んぐっ、んぐっ、んぐっ、んぐっ、んぐっ、んぐっ………ブフゥーーッッ！　ゲホゲホッ！　はぁっ！　はぁはぁっ！　ゲホゲホッ……！」'
+    # print(delete_label(_text))
+    # print(split_line(delete_label(_text)))
+    # extract_srp()
+    replace_srp()
+    repack_pac()
 

@@ -8,4 +8,5 @@ Encrypt&Decrypt/*.xp3
 Encrypt&Decrypt/*.txt
 baidufanyi.py
 tencentfanyi.py
+tencentfanyi.py2
 __pycache__
