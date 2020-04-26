@@ -5,6 +5,10 @@
 * 输出的结果在output文件夹
 * 中间的结果在intermediate_file文件夹，主要是日文-中文的字典
 
+
+# YU-ris
+替换错误导致循环！！！！！！！！！
+
 # .aos
 1. 表示文字列が不正です
 
@@ -37,13 +41,45 @@ GB2312_CHARSET = 134
 SHIFTJIS_CHARSET = 128
 
 
-.MES
-count 4
-offset 508
+# .MES
+0-4 count
+offset
+data
 
-0
-206
-258
-1A4BD
-1A5C2 1AACD 
-1A69F 1ABAA
+白い肌をあらわにした彼女が、恥ずかしそうにブランケットの裾を引き寄せ身をすくめた。
+
+
+# NEKOSDK
+每块大小 
+ea 开头
+u32 长度
+05 00 00 00 64 00 00 00 后 c0 为文本区
+
+「 …これが新しい俺の家か』
+まだ場所によっては雪の残る三月。
+
+# .snl
+0-4 0000
+4-6 len unk1
+6-8 len unk2
+8-12 len str
+
+每个字符串后有0000
+
+
+# ANIM
+## this
+0-4 ?
+4-8 句柄
+8-12 文件长度
+12-16 ？
+16-20 数据地址
+
+sub_45E720 应该在解密
+## sce
+0-4 00 00 00 01
+4-20 key
+
+## sce decoded
+0-4 unk
+4-8 str address

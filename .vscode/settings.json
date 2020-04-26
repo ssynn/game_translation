@@ -1,3 +1,9 @@
 {
-    "python.pythonPath": "C:\\Users\\82406\\Anaconda3\\python.exe"
+    "python.pythonPath": "C:\\Users\\82406\\Anaconda3\\envs\\python27\\python.exe",
+    "files.associations": {
+        "*.html": "html",
+        "vector": "cpp"
+    },
+    "python.linting.flake8Enabled": true,
+    "python.linting.enabled": true
 }
