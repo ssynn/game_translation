@@ -83,3 +83,7 @@ sub_45E720 应该在解密
 ## sce decoded
 0-4 unk
 4-8 str address
+字符串以00结尾，长度似乎不影响结果
+
+## exe
+logfont -> createfontindirecta -> getglyphoutline

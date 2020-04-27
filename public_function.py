@@ -9,6 +9,16 @@ from struct import unpack, pack
 from pdb import set_trace as int3
 import chardet
 
+def _init_():
+    file_all = os.listdir()
+    if 'intermediate_file' not in file_all:
+        os.mkdir('intermediate_file')
+    if 'output' not in file_all:
+        os.mkdir('output')
+    if 'input' not in file_all:
+        os.mkdir('input')
+_init_()
+
 def convert_code(to_code: str):
     file_all = os.listdir('input')
     for f in file_all:
@@ -1913,6 +1923,13 @@ class DXLib():
 
 
 class ANIM():
+    '''
+    exe需要修改
+    1. 字符范围检测 cmp   eax, 9Fh
+    2. LOGFONT 8x0h -> 86h add   push  800h
+    3. 修改空格 81 40 -> A1A1 
+
+    '''
     def switch_key(key: bytearray, ch: int):
         t = ch
         ch &= 7
@@ -1964,13 +1981,6 @@ class ANIM():
 
     def decrypt(data: bytes):
         '''
-        *(char *)(j + decoded_data) = (v10[v7] | *((char *)data_buff + j + 20)) & ~(v10[v7] & *((char *)data_buff + j + 20));
-        if ( ++v7 == 16 )
-        {
-        v7 = 0;
-        sub_45E1A0(v10, *(char *)(j + decoded_data - 1));
-        }
-
         key  54 C8 58 54 0A D8 CD 3C B5 EC 98 0F E6 9E F3 E8
         data 1F 6C 5C 54 71 0E C9 3C FE ED DA 23 E7 9E F3 AA
         ans  4B A4 04 00 7B D6 04 00 4B 01 42 2C 01 00 00 42
@@ -1980,7 +1990,7 @@ class ANIM():
         length = len(data)
         v = 0
         for i in range(length):
-            data[i] = (key[v] | data[i]) & (~(key[v] & data[i]) & 0xff)
+            data[i] = key[v] ^ data[i]
             v += 1
             if v == 16:
                 v = 0
@@ -1988,6 +1998,18 @@ class ANIM():
         return data
     
     def extract_dat():
+        def formate_vnr(buff:str):
+            buff = buff.replace('　', '')
+            buff = buff.replace('@n','')
+            # [a-zA-Z].*?\n
+            if buff and not (buff[0] <='z' and buff[0] >='a') and not (buff[0] <='Z' and buff[0] >='A'):
+                tags = re.findall(r'@\[.*?\]',buff)
+                for tag in tags:
+                    _t = tag.find(':')
+                    name = tag[2:_t]
+                    value = tag[_t+1:-1]
+                    buff = buff.replace(tag, name) + value
+            return buff
         file_all = os.listdir('input')
         for f in file_all:
             if os.path.splitext(f)[-1] == '.dat':
@@ -2001,15 +2023,8 @@ class ANIM():
         for i in data:
             if i == 0:
                 buff = buff.decode('cp932')
-                buff = buff.replace('　', '')
-                # [a-zA-Z].*?\n
+                buff = formate_vnr(buff)
                 if buff and not (buff[0] <='z' and buff[0] >='a') and not (buff[0] <='Z' and buff[0] >='A'):
-                    tags = re.findall(r'@\[.*?\]',buff)
-                    for tag in tags:
-                        _t = tag.find(':')
-                        name = tag[2:_t]
-                        value = tag[_t+1:-1]
-                        buff = buff.replace(tag, name) + value
                     ans.append(buff)
                 buff = b''
             else:
@@ -2022,6 +2037,87 @@ class ANIM():
         save_json('intermediate_file/jp_chs.json', jp_chs)
         # save_file_b(f'intermediate_file/{f}', data)
 
+    def encrypt(data:bytes):
+        length = len(data)
+        key = bytearray(b'\x00'*16)
+        new_data = b'\x00\x00\x00\x01'+key+b'\x00'*length
+        new_data = bytearray(new_data)
+        
+        v = 0
+        print(length)
+        for i in range(length):
+            new_data[20+i] = key[v] ^ data[i]
+            v += 1
+            if v == 16:
+                v = 0
+                key = ANIM.switch_key(key, data[i-1])
+        print(len(new_data))
+        return new_data
+        # save_file_b(f'output/{os.path.split(path)[-1]}', new_data)
+
+    def output():
+        def _has_jp(line: str) -> bool:
+            '''
+            如果含有日文文字（除日文标点）则认为传入文字含有日文, 返回true
+            '''
+            for ch in line:
+                if (ch >= '\u0800' and ch < '\u9fa5') and ch not in ('「', '」', '…', '。', '，', '―', '”', '“', '☆', '♪', '、', '※', '‘', '’', '』', '『', '　', '゛', '・', '▁', '★', '〜', '！', '—', '【', '】'):
+                    return True
+            return False
+        def formate_vnr(buff:str):
+            buff = buff.replace('　', '')
+            buff = buff.replace('@n','')
+            # [a-zA-Z].*?\n
+            if buff and not (buff[0] <='z' and buff[0] >='a') and not (buff[0] <='Z' and buff[0] >='A'):
+                tags = re.findall(r'@\[.*?\]',buff)
+                for tag in tags:
+                    _t = tag.find(':')
+                    name = tag[2:_t]
+                    value = tag[_t+1:-1]
+                    buff = buff.replace(tag, name) + value
+            return buff
+        jp_chs = open_json('intermediate_file/jp_chs.json')
+        file_all = os.listdir('input')
+        for f in file_all:
+            if os.path.splitext(f)[-1] == '.dat':
+                break
+        data = open_file_b(f'input/{f}')
+        data = ANIM.decrypt(data)
+        str_offset = int.from_bytes(data[4:8], byteorder='little')
+        str_data = data[str_offset:]
+        str_all = []
+        buff = b''
+        for i in str_data:
+            if i == 0:
+                str_all.append(buff.decode('cp932'))
+                buff = b''
+            else:
+                buff += to_bytes(i, 1)
+        cnt = 0
+        faild = []
+        for i in range(len(str_all)):
+            key = formate_vnr(str_all[i])
+            if key in jp_chs:
+                if len(jp_chs[key]) < 4 and _has_jp(key):
+                    _t = ''
+                else:
+                    _t = '　　　'
+                str_all[i] = _t + jp_chs[key]
+                cnt += 1
+            else:
+                faild.append(key)
+        data = data[:str_offset]
+        for i in str_all:
+            data += (i.encode('gbk', errors='ignore')+b'\x00')
+        data += b'\x00'
+        print('替换：', cnt)
+        print('失败：', len(faild))
+        data = ANIM.encrypt(data)
+        save_file_b(f'output/{f}', data)
+        save_file('intermediate_file/faild.txt', '\n'.join(faild))
+
+        
+
 
 if __name__ == "__main__":
     # print(SNL._split_line('えっ！？いや、そんなつもりは‥‥ないけど。'))
@@ -2030,5 +2126,7 @@ if __name__ == "__main__":
     # YU_RIS.output_ybn()
     # DXLib.create_key(b'\xC8\xFD\xFC\xFD\xC8\xB5\xBA\xB9\xC4\xCC\xFD\xFC\xC1\xB8\xBA\xB9\xC8\xBB\xC4\xBA')
     # DXLib.decode_mes()
-    ANIM.extract_dat()
+    # ANIM.extract_dat()
+    # ANIM.encrypt('intermediate_file/kabe_sce.dat')
+    ANIM.output()
     
