@@ -1,13 +1,15 @@
 # 一些常用功能的集合
 import os
-import json
 import re
-import sqlite3
-from tencentfanyi import translate as tencent_t
-from baidufanyi import translate as baidu_t
-from struct import unpack, pack
-from pdb import set_trace as int3
+import json
+from Crypto.Cipher import AES  
 import chardet
+import sqlite3
+from pdb import set_trace as int3
+from struct import unpack, pack
+from baidufanyi import translate as baidu_t
+from tencentfanyi import translate as tencent_t
+
 
 def _init_():
     file_all = os.listdir()
@@ -18,6 +20,7 @@ def _init_():
     if 'input' not in file_all:
         os.mkdir('input')
 _init_()
+
 
 def convert_code(to_code: str):
     file_all = os.listdir('input')
@@ -107,6 +110,16 @@ def get_scenario_from_origin_sakura(data: list):
     return text_all
 
 
+def format_sakura(text: str):
+    tags = re.findall(r'\[mruby .*?\]', text)
+    for t in tags:
+        _p = t.find('text="')
+        if _p != -1:
+            _value = t[_p+6:-2]
+            text = text.replace(t, _value)
+    return text
+
+
 def output_translated_scenrio_sakura(encoding):
     # 输出翻译后的文件
     with open('intermediate_file/jp_chs.json', 'r', encoding='utf8') as f:
@@ -171,7 +184,7 @@ def extract_jp(get_scenario_from_origin, encoding):
 
     jp = []
     for file_name in file_origial:
-        with open(file_name, 'r', encoding=encoding) as f:
+        with open(file_name, 'r', encoding=encoding, errors='ignore') as f:
             text_t = f.readlines()
         jp += get_scenario_from_origin(text_t)
 
@@ -416,7 +429,7 @@ def split_line(text: str) -> list:
     '''
     用正则表达式切割文本，遇到'「', '」', '…', '。', '，', '―', '”', '“', '☆', '♪', '、', '‘', '’', '』', '『', '　', 
     '''
-    split_str = r'\[.*?\]|<.+?>|[a-z0-9A-Z]|,|\\n|\||「|」|…+|。|』|『|　|―+|）|（|・|？|！|★|☆|♪|※|\\|“|”|"|\]|\[|\/|\;|【|】'
+    split_str = r'\[.*?\]|<.+?>|[a-z0-9A-Z]|,|\\n|\||「|」|…+|。|@|』|『|　|―+|）|（|・|？|！|★|☆|♪|※|\\|“|”|"|\]|\[|\/|\;|【|】'
     _text_list = re.split(split_str, text)
     _ans = []
     for i in _text_list:
@@ -537,7 +550,7 @@ def replace_all(find_text, encoding, output_encoding):
 
         record += find_text(data, failed_text, jp_chs)
 
-        with open('output/'+file_name, 'w', encoding=output_encoding) as f:
+        with open('output/'+file_name, 'w', encoding=output_encoding, errors='ignore') as f:
             for line in data:
                 f.write(line)
     with open('intermediate_file/failed.txt', 'w', encoding="utf8") as f:
@@ -574,12 +587,80 @@ def to_bytes(a: int, _len: int) -> int:
     return int.to_bytes(a, _len, byteorder='little')
 
 
+def from_bytes(a: bytes):
+    return int.from_bytes(a, byteorder='little')
+
+
 def byte_add(*args):
     ans = 0
     for i in args:
         ans += i
     return ans & 0xff
 
+
+def delete_zero(name: bytes, encoding='utf8'):
+    while not name[-1]:
+        name = name[:-1]
+    return name.decode(encoding)
+
+
+class LzssCompressor():
+
+    def __init__(self):
+        self.frame_size = 0x1000
+        self.frame_fill = 0
+        self.frame_init_pos = 0xfee
+    
+    def get_byte(self, data):
+        _t = data[0]
+        data = data[1:]
+        return _t
+    
+    def decompres(self, m_input:bytes, out_length:int):
+        m_output = bytearray(b'\x00'*out_length)
+        dst = 0
+        frame = bytearray(b'\x00'*self.frame_size)
+        frame_pos = self.frame_init_pos
+        frame_mask = self.frame_size - 1
+        remaining = len(m_input)
+        while remaining > 0:
+            ctl = self.get_byte(m_input)
+            remaining -= 1
+            bit = 1
+            while remaining > 0 and bit != 0x100:
+                if dst >= out_length:
+                    return m_output
+                if 0 != (ctl & bit):
+                    b = self.get_byte(m_input)
+                    remaining -= 1
+                    frame[frame_pos] = b
+                    frame_pos += 1
+                    frame_pos &= frame_mask
+                    m_output[dst] = b
+                    dst += 1
+                else:
+                    if remaining < 2:
+                        return m_output
+                    lo = self.get_byte(m_input)
+                    hi = self.get_byte(m_input)
+                    remaining -= 2
+                    offset = (hi & 0xf0) << 4 | lo
+                    count = 3 + (hi & 0xf)
+                    while count != 0:
+                        if dst >= out_length:
+                            break
+                        v = frame[offset]
+                        offset += 1
+                        offset &= frame_mask
+                        frame[frame_pos] = v
+                        frame_pos += 1
+                        frame_pos &= frame_mask
+                        m_output[dst] = v
+                        dst += 1
+                        count -= 1
+                bit <<= 1
+        return m_input
+        
 
 class Majiro():
     '''
@@ -889,6 +970,14 @@ class XFL():
     '''
     提取gsc文件内的文本和把翻译后的文本插入gsc文件
     '''
+    def format_xfl(text: str):
+        '''
+        翻译用
+        \[.*?\]|<.+?>|,|\\n|　|―+|\\|"|\]|\[|\/|\;|[a-z0-9A-Z]
+        '''
+        patt = r'\[.*?\]|<.+?>|\|'
+        return re.sub(patt, '', text)
+
     def extract_gsc(path='input'):
         jp_all = []
         file_all = os.listdir(path)
@@ -1259,7 +1348,7 @@ class YU_RIS():
         '''
         修改对应位置数据
         修改表头数据
-        返回(ans:bytes, cnt:int, faild:list)
+        返回(ans:bytes, cnt:int, failed:list)
 
         首先把所有的字符串都放入parameter字典
         把函数类型也放入
@@ -1309,7 +1398,7 @@ class YU_RIS():
         for i in all_methord:
             methord_code += [i['code_8'] for x in range(i['args_8'])]
 
-        faild = []
+        failed = []
         cnt = 0
 
         for i in range(len(all_parameter)):
@@ -1317,8 +1406,9 @@ class YU_RIS():
             _para['index'] = i
             _p_str = _para['char_offset_32']
             _para['str'] = (body['str'][_p_str:_p_str+_para['char_count_32']])
-            while len(_para['str']) < _para['char_count_32']:
-                _para['str'] += b'\x00'
+            if len(_para['str']) < _para['char_count_32']:
+                _cnt = _para['char_count_32'] - len(_para['str'])
+                _para['str'] += b'\x00' * _cnt
             # _para['char_count_32'] = len(_para['str'])
             if methord_code[i] == 91 and _para['un_32'] == 0:
                 _key = _para['str'].decode('cp932')
@@ -1327,7 +1417,7 @@ class YU_RIS():
                     _para['char_count_32'] = len(_para['str'])
                     cnt += 1
                 else:
-                    faild.append(_key)
+                    failed.append(_key)
             _key = _extract_button(_para['str'])
             if _key and methord_code[i] == 29:
                 # print(_key, key in jp_chs)
@@ -1341,11 +1431,11 @@ class YU_RIS():
                     # print(_para['str'])
                     cnt += 1
                 else:
-                    faild.append(_key)
+                    failed.append(_key)
 
         # # 没有替换则直接返回
-        # if cnt == 0 and len(faild) == 0:
-        #     return (data, cnt, faild)
+        # if cnt == 0 and len(failed) == 0:
+        #     return (data, cnt, failed)
 
         # 对齐参数, 需要排序
         # print(header)
@@ -1370,7 +1460,7 @@ class YU_RIS():
         ans = body['header'] + body['methord'] + \
             body['parameter'] + body['str'] + body['un']
 
-        # print(cnt, len(faild))
+        # print(cnt, len(failed))
         # 检查parameter 和 字符串长度
         for i in all_parameter:
             _p_str = i['char_offset_32']
@@ -1391,7 +1481,7 @@ class YU_RIS():
             print(_header['data3_length_32'], len(body['str']))
             raise Exception('头部字符串长度')
 
-        return (ans, cnt, faild)
+        return (ans, cnt, failed)
 
     # extract
     def extract_ybn(path='input'):
@@ -1438,12 +1528,12 @@ class YU_RIS():
         1. 替换input文件夹内ybn的字符串，使用gbk编码，保存到output文件夹内
         2. 加密output文件夹内的ybn文件
         '''
-        faild = []
+        failed = []
         file_all = os.listdir(_input)
         jp_chs = open_json(jp_chs)
         for f in file_all:
             _t = YU_RIS.replace_string(open_file_b(f'{_input}/{f}'), jp_chs)
-            faild += _t[-1]
+            failed += _t[-1]
             if _t[2]:
                 # print(f, "失败：", len(_t[2]))
                 ...
@@ -1452,7 +1542,7 @@ class YU_RIS():
                 if not os.path.exists(output):
                     os.mkdir(output)
                 save_file_b(f'{output}/{f}', _t[0])
-        save_json('intermediate_file/faild.json', faild)
+        save_json('intermediate_file/failed.json', failed)
 
         file_all = os.listdir(output)
         for f in file_all:
@@ -1466,7 +1556,8 @@ class YU_RIS():
 
 class PAC():
     '''
-    从srp文件中提取日文，并进行一定的处理，使得与vnr一致
+    拆包、解密、替换、加密、打包
+    FIXME 选择支没有汉化
     '''
     def extract_srp():
         '''
@@ -1495,15 +1586,25 @@ class PAC():
                     #     _str = _str.replace(r'\\n', '')
                     ans.append(_str)
                     cnt2 += 1
-                # elif _str[4:] in (b'\x81\x75', b'\x81\x76', b'\x81\64'):
-                #     print(_str[4:].decode('cp932'),333333333333)
+                # else:
+                #     '''
+                #     ('「', '」', '』', '『', '　', '【', '】'):
+                #     '''
+                #     _s = _str
+                #     try:
+                #         _s = _s.decode('cp932')
+                #         if _s.count('「') or _s.count('）') or _s.count('」') or _s.count('（'):
+                #             ans.append(_s)
+                #             print(_s)
+                #     except Exception as e:
+                #         pass
                 f_data = f_data[2+_len:]
                 cnt += 1
             print(f, cnt, cnt2)
         save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
 
     def replace_srp():
-        def _formate(s: str):
+        def _format(s: str):
             count = s.count(',')
             if count == 0:
                 return '　'+s
@@ -1514,7 +1615,7 @@ class PAC():
         file_all = os.listdir('input')
         jp_chs = open_json('intermediate_file/jp_chs.json')
         cnt_all = 0
-        faild = []
+        failed = []
         for f in file_all:
             f_data = open_file_b(f'input/{f}')
             if f[0] != '0':
@@ -1531,7 +1632,7 @@ class PAC():
                 if _str[:2] == b'\x00\x00':
                     key = _str[4:].decode('cp932')
                     if key in jp_chs and jp_chs[key]:
-                        chs = _formate(jp_chs[key])
+                        chs = jp_chs[key]
                         chs = chs.encode('gbk', errors='ignore')
                         ans_data += int.to_bytes(len(chs)+4,
                                                  2, byteorder='little')
@@ -1540,21 +1641,16 @@ class PAC():
                         cnt += 1
                         cnt_all += 1
                     else:
-                        faild.append(key)
+                        failed.append(key)
                 else:
                     ans_data += f_data[:2+_len]
                 f_data = f_data[2+_len:]
             print(f, cnt)
             save_file_b(f'output/{f}', ans_data)
         print('总共替换：', cnt_all)
-        save_json('intermediate_file/faild.json', faild)
+        save_json('intermediate_file/failed.json', failed)
 
-    def extract_pac(path: str, decode=True):
-        def delete_zero(name: bytes):
-            while not name[-1]:
-                name = name[:-1]
-            return name.decode()
-
+    def unpack_pac(path: str, decode=True):
         def rot_byte_r(data: bytes, count: int):
             # print(data)
             count &= 7
@@ -1714,6 +1810,9 @@ class SILKY():
             os.system(f'mestool.exe p input/{f} intermediate_file/{f}')
 
     def cut_MES(path: str):
+        '''
+        拆分MES文件用于研究结构
+        '''
         data = open_file_b(path)
         count = int.from_bytes(data[:4], byteorder='little')
         offset = []
@@ -1849,6 +1948,23 @@ class DXLib():
     '''
     key = b'\xd0\xcf\xcd\x9b\x88\x8d\x8c\x97\x9f\xbf\x94\x8b\x8d\x8c\x9b\x8e\x97\x8d\x9b'
 
+    def create_key_dx():
+        Key = b'\xAA'*12
+        Key = bytearray(Key)
+        Key[0] ^= 0xff
+        Key[1] = ((Key[1] >> 4) | (Key[1] << 4)) & 0xff
+        Key[2] = Key[2] ^ 0x8a
+        Key[3] = ((((Key[3] >> 4) | (Key[3] << 4))) ^ 0xff) & 0xff
+        Key[4] ^= 0xff
+        Key[5] = Key[5] ^ 0xac
+        Key[6] ^= 0xff
+        Key[7] = ((((Key[7] >> 3) | (Key[7] << 5))) ^ 0xff) & 0xff
+        Key[8] = ((Key[8] >> 5) | (Key[8] << 3)) & 0xff
+        Key[9] = Key[9] ^ 0x7f
+        Key[10] = (((Key[10] >> 4) | (Key[10] << 4)) ^ 0xd6) & 0xff
+        Key[11] = Key[11] ^ 0xcc
+        return Key
+
     def decrypt(_data: bytes):
         '''
 
@@ -1925,10 +2041,9 @@ class DXLib():
 class ANIM():
     '''
     exe需要修改
-    1. 字符范围检测 cmp   eax, 9Fh
-    2. LOGFONT 8x0h -> 86h add   push  800h
+    1. 字符范围检测 cmp   eax, 0x9F
+    2. LOGFONT 8x0h -> 86h add   CreateFontIndirectA
     3. 修改空格 81 40 -> A1A1 
-
     '''
     def switch_key(key: bytearray, ch: int):
         t = ch
@@ -1972,7 +2087,7 @@ class ANIM():
             key[2] = byte_add(key[10], key[6])
             key[3] = byte_add(key[11], key[7])
             key[4] = byte_add(key[12], key[8])
-        elif ch==7:
+        elif ch == 7:
             key[1] = byte_add(key[9], key[5])
             key[2] = byte_add(key[10], key[6])
             key[3] = byte_add(key[11], key[7])
@@ -1996,14 +2111,17 @@ class ANIM():
                 v = 0
                 key = ANIM.switch_key(key, data[i-1])
         return data
-    
-    def extract_dat():
-        def formate_vnr(buff:str):
+
+    def extract():
+        '''
+        需要提取*_define.dat和*_sce.dat
+        '''
+        def format_vnr(buff: str):
             buff = buff.replace('　', '')
-            buff = buff.replace('@n','')
+            buff = buff.replace('@n', '')
             # [a-zA-Z].*?\n
-            if buff and not (buff[0] <='z' and buff[0] >='a') and not (buff[0] <='Z' and buff[0] >='A'):
-                tags = re.findall(r'@\[.*?\]',buff)
+            if buff and not (buff[0] <= 'z' and buff[0] >= 'a') and not (buff[0] <= 'Z' and buff[0] >= 'A'):
+                tags = re.findall(r'@\[.*?\]', buff)
                 for tag in tags:
                     _t = tag.find(':')
                     name = tag[2:_t]
@@ -2011,38 +2129,56 @@ class ANIM():
                     buff = buff.replace(tag, name) + value
             return buff
         file_all = os.listdir('input')
-        for f in file_all:
-            if os.path.splitext(f)[-1] == '.dat':
-                break
-        data = open_file_b(f'input/{f}')
-        data = ANIM.decrypt(data)
-        str_offset = int.from_bytes(data[4:8], byteorder='little')
-        data = data[str_offset:]
-        buff = b''
         ans = []
-        for i in data:
-            if i == 0:
-                buff = buff.decode('cp932')
-                buff = formate_vnr(buff)
-                if buff and not (buff[0] <='z' and buff[0] >='a') and not (buff[0] <='Z' and buff[0] >='A'):
-                    ans.append(buff)
+        for f in file_all:
+            data = open_file_b(f'input/{f}')
+            data = ANIM.decrypt(data)
+            if f[-6:] == 'ce.dat':
+                str_offset = int.from_bytes(data[4:8], byteorder='little')
+                data = data[str_offset:]
                 buff = b''
-            else:
-                buff += to_bytes(i, 1)
+
+                for i in data:
+                    if i == 0:
+                        buff = buff.decode('cp932')
+                        # buff = format_vnr(buff)
+                        if buff and not (buff[0] <= 'z' and buff[0] >= 'a') and not (buff[0] <= 'Z' and buff[0] >= 'A'):
+                            ans.append(buff)
+                        buff = b''
+                    else:
+                        buff += to_bytes(i, 1)
+            elif f[-6:] == 'ne.dat':
+                p = 0
+                while p < len(data):
+                    if data[p:p+2] == b'\x81\x79':
+                        _p = p+2
+                        while data[_p]:
+                            _p += 1
+                        ans.append(data[p:_p].decode('cp932'))
+                        p = _p
+                    p += 1
         save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
-        jp_chs = dict()
+        if os.path.exists('intermediate_file/jp_chs.json'):
+            jp_chs = open_json('intermediate_file/jp_chs.json')
+        else:
+            jp_chs = dict()
+        cnt = 0
         for i in ans:
-            jp_chs[i] = ''
+            if i not in jp_chs:
+                jp_chs[i] = ''
+                cnt += 1
         jp_chs['engine'] = 'anim'
         save_json('intermediate_file/jp_chs.json', jp_chs)
+        print('共：', len(ans))
+        print('添加：', cnt)
         # save_file_b(f'intermediate_file/{f}', data)
 
-    def encrypt(data:bytes):
+    def encrypt(data: bytes):
         length = len(data)
         key = bytearray(b'\x00'*16)
         new_data = b'\x00\x00\x00\x01'+key+b'\x00'*length
         new_data = bytearray(new_data)
-        
+
         v = 0
         print(length)
         for i in range(length):
@@ -2056,20 +2192,23 @@ class ANIM():
         # save_file_b(f'output/{os.path.split(path)[-1]}', new_data)
 
     def output():
-        def _has_jp(line: str) -> bool:
+        def _is_name(line: str) -> bool:
             '''
             如果含有日文文字（除日文标点）则认为传入文字含有日文, 返回true
             '''
+            if len(line) > 4:
+                return False
             for ch in line:
-                if (ch >= '\u0800' and ch < '\u9fa5') and ch not in ('「', '」', '…', '。', '，', '―', '”', '“', '☆', '♪', '、', '※', '‘', '’', '』', '『', '　', '゛', '・', '▁', '★', '〜', '！', '—', '【', '】'):
-                    return True
-            return False
-        def formate_vnr(buff:str):
+                if ch in ('「', '」', '…', '。', '，', '―', '”', '“', '☆', '♪', '、', '※', '‘', '’', '』', '『', '　', '゛', '・', '▁', '★', '〜', '！', '—', '【', '】'):
+                    return False
+            return True
+
+        def format_vnr(buff: str):
             buff = buff.replace('　', '')
-            buff = buff.replace('@n','')
+            buff = buff.replace('@n', '')
             # [a-zA-Z].*?\n
-            if buff and not (buff[0] <='z' and buff[0] >='a') and not (buff[0] <='Z' and buff[0] >='A'):
-                tags = re.findall(r'@\[.*?\]',buff)
+            if buff and not (buff[0] <= 'z' and buff[0] >= 'a') and not (buff[0] <= 'Z' and buff[0] >= 'A'):
+                tags = re.findall(r'@\[.*?\]', buff)
                 for tag in tags:
                     _t = tag.find(':')
                     name = tag[2:_t]
@@ -2078,55 +2217,459 @@ class ANIM():
             return buff
         jp_chs = open_json('intermediate_file/jp_chs.json')
         file_all = os.listdir('input')
-        for f in file_all:
-            if os.path.splitext(f)[-1] == '.dat':
-                break
-        data = open_file_b(f'input/{f}')
-        data = ANIM.decrypt(data)
-        str_offset = int.from_bytes(data[4:8], byteorder='little')
-        str_data = data[str_offset:]
-        str_all = []
-        buff = b''
-        for i in str_data:
-            if i == 0:
-                str_all.append(buff.decode('cp932'))
-                buff = b''
-            else:
-                buff += to_bytes(i, 1)
         cnt = 0
-        faild = []
-        for i in range(len(str_all)):
-            key = formate_vnr(str_all[i])
-            if key in jp_chs:
-                if len(jp_chs[key]) < 4 and _has_jp(key):
-                    _t = ''
-                else:
-                    _t = '　　　'
-                str_all[i] = _t + jp_chs[key]
-                cnt += 1
-            else:
-                faild.append(key)
-        data = data[:str_offset]
-        for i in str_all:
-            data += (i.encode('gbk', errors='ignore')+b'\x00')
-        data += b'\x00'
-        print('替换：', cnt)
-        print('失败：', len(faild))
-        data = ANIM.encrypt(data)
-        save_file_b(f'output/{f}', data)
-        save_file('intermediate_file/faild.txt', '\n'.join(faild))
+        failed = []
+        for f in file_all:
+            data = open_file_b(f'input/{f}')
+            data = ANIM.decrypt(data)
+            if f[-6:] == 'ce.dat':
+                data = open_file_b(f'input/{f}')
+                data = ANIM.decrypt(data)
+                str_offset = int.from_bytes(data[4:8], byteorder='little')
+                str_data = data[str_offset:]
+                str_all = []
+                buff = b''
+                for i in str_data:
+                    if i == 0:
+                        str_all.append(buff.decode('cp932'))
+                        buff = b''
+                    else:
+                        buff += to_bytes(i, 1)
 
+                for i in range(len(str_all)):
+                    # key = format_vnr(str_all[i])
+                    key = str_all[i]
+                    if key in jp_chs and jp_chs[key]:
+                        if _is_name(key):
+                            _t = ''
+                        elif key[0] in "「（『":
+                            _t = '　　　'
+                        else:
+                            _t = '　'
+                        str_all[i] = _t + jp_chs[key] + _t
+                        cnt += 1
+                    else:
+                        failed.append(key)
+                data = data[:str_offset]
+                for i in str_all:
+                    data += (i.encode('gbk', errors='ignore')+b'\x00')
+                data += b'\x00'
+                data = ANIM.encrypt(data)
+                save_file_b(f'output/{f}', data)
+            elif f[-6:] == 'ne.dat':
+                p = 0
+                data = bytearray(data)
+                while p < len(data):
+                    if data[p:p+2] == b'\x81\x79':
+                        _p = p+2
+                        while data[_p]:
+                            _p += 1
+                        key = data[p:_p].decode('cp932')
+                        if key in jp_chs and jp_chs[key]:
+                            data[p:_p] = jp_chs[key].encode(
+                                'gbk', errors='ignore')
+                            cnt += 1
+                        else:
+                            failed.append(key)
+                        # p = _p
+                    p += 1
+                data = ANIM.encrypt(data)
+                save_file_b(f'output/{f}', data)
+        print('替换：', cnt)
+        print('失败：', len(failed))
+
+        save_file('intermediate_file/failed.txt', '\n'.join(failed))
+
+    def format_t(buff: str):
+        if buff and not (buff[0] <= 'z' and buff[0] >= 'a') and not (buff[0] <= 'Z' and buff[0] >= 'A'):
+            tags = re.findall(r'@\[.*?\]', buff)
+            for tag in tags:
+                _t = tag.find(':')
+                name = tag[2:_t]
+                value = tag[_t+1:-1]
+                buff = buff.replace(tag, name)
+        return buff
+
+
+class Lilim():
+    class BitStream:
+        def __init__(self, data: bytes):
+            self.m_input = data
+            self.m_bits = 0         # bit缓存
+            self.m_chached_bits = 0  # 记录bit缓存剩余的bit数
+            self.pos = 0            # bit位
+            self.tree = []
+
+        def get_bits(self, count: int) -> int:
+            '''
+            获取n位bit，转换成int后输出，指针后移count位
+            '''
+            self.pos += count
+            if count > 24:
+                return -1
+            while self.m_chached_bits < count:
+                if not len(self.m_input):
+                    return -1
+                b = self.m_input[0]
+                self.m_input = self.m_input[1:]
+
+                self.m_bits = (self.m_bits << 8) | b
+                self.m_bits = self.m_bits & 0xffffffff
+                self.m_chached_bits += 8
+            mask = (1 << count) - 1
+            self.m_chached_bits -= count
+            ans = ((self.m_bits >> self.m_chached_bits) & mask)
+            self.tree.append(ans)
+            return ans
+
+        def get_next_bit(self):
+            return self.get_bits(1)
+
+        def display(self):
+            print(self.m_bits, self.m_chached_bits, self.m_input[:20])
+
+    class HuffmanCompressor:
+        def __init__(self, data_decoded: bytes):
+            self.data = data_decoded
+            self.code_table = {}
+            self.new_tree = []
+
+            node_dict = dict()
+            tree = []
+            for ch in data_decoded:
+                if ch not in node_dict:
+                    node_dict[ch] = 0
+                node_dict[ch] += 1
+            for key in node_dict:
+                tree.append(Lilim.node(key, node_dict[key]))
+
+            self.root = self.build_tree(tree)[0]
+            self.disp_tree(self.root, [])
+
+            # print(self.code_table)
+            # print(self.new_tree)
+
+        # FIXME
+        def compress(self):
+            new_data = ''
+            # 先全变成01串
+            for i in self.new_tree:
+                _t = bin(i)[2:]
+                if _t not in ('0', '1'):
+                    _t = self.fill_zero(_t)
+                new_data += _t
+            for i in self.data:
+                if i not in self.code_table:
+                    raise Exception(f'编码错误：{i}')
+                new_data += self.code_table[i]
+
+            # 把01串转换成bytes串
+            bytes_length = int(len(new_data)/8+0.5)
+            ans = int.to_bytes(len(self.data)+1, 4, byteorder='little')
+            for i in range(bytes_length):
+                _t = new_data[i*8:i*8+8]
+                if len(_t) < 8:
+                    _t = self.fill_zero(_t, False)
+                _t = (self.bin_to_byte_8(_t))
+                ans += int.to_bytes(_t, 1, byteorder='little')
+
+            return ans
+
+        # 哈夫曼树构建
+        def build_tree(self, l):
+            if len(l) == 1:
+                return l
+            sorts = sorted(l, key=lambda x: x.value, reverse=False)
+            n = Lilim.node.build_father(sorts[0], sorts[1])
+            sorts.pop(0)
+            sorts.pop(0)
+            sorts.append(n)
+            return self.build_tree(sorts)
+        def disp_tree(self, node: 'node', path):
+            if not node.left and not node.right:
+                self.code_table[node.ch] = ''.join(map(str, path))
+                self.new_tree.append(0)
+                self.new_tree.append(node.ch)
+                return
+            self.new_tree.append(1)
+            self.disp_tree(node.left, path+[0])
+            self.disp_tree(node.right, path+[1])
+
+        def bin_to_byte_8(self, data: str) -> bytes:
+            if len(data) != 8:
+                raise Exception(f'长度错误！{len(data)}')
+            ans = 0
+            for i in data:
+                ans = ans << 1
+                ans |= (1 if i == '1' else 0)
+            return ans
+
+        def fill_zero(self, data: str, front=True) -> str:
+            '''
+            吧字符串前面或后面补上0
+            '''
+            if len(data) > 8:
+                raise Exception(f'长度错误！{len(data)}')
+            if front:
+                return data.rjust(8, '0')
+            else:
+                return data.ljust(8, '0')
+
+        def int_to_byte_8(self, data: int):
+            _data = bin(data)[2:]
+            _data = self.fill_zero(_data)
+            return bin_to_byte_8(_data)
+
+    class node:
+        def __init__(self, ch=None, value=None, left=None, right=None, father=None):
+            self.ch = ch          # 字符
+            self.value = value    # 数据域
+            self.left = left      # 左孩子
+            self.right = right    # 右孩子
+            self.father = father  # 父亲结点
+
+        def build_father(left, right):
+            n = Lilim.node(value=left.value + right.value,
+                           left=left, right=right)
+            left.father = right.father = n
+            return n
+
+    class HuffmanDecompressor:
+        def __init__(self, data: bytearray, tree=None):
+            self.m_length = int.from_bytes(
+                data[:4], byteorder='little')  # 解压后大小
+            self.tree_size = 512
+            self.lhs = [0 for i in range(512)]
+            self.rhs = [0 for i in range(512)]
+            self.m_token = 256
+            self.m_buffer = bytearray()
+            self.m_input = Lilim.BitStream(data[4:])
+
+        def unpack(self):
+            self.m_token = 256
+            root = self.create_tree()
+            # print(self.rhs)
+            # print(self.lhs)
+            # print('root:', root, 'bit pos:', self.m_input.pos)
+            while self.m_length > 1:
+                symbol = root
+                while symbol >= 0x100:
+                    bit = self.m_input.get_bits(1)
+                    if bit == -1:
+                        print('error')
+                        return
+                    if (bit == 1):
+                        symbol = self.rhs[symbol]
+                    else:
+                        symbol = self.lhs[symbol]
+                self.m_buffer.append(symbol)
+                self.m_length -= 1
+
+        def decode(self):
+            self.unpack()
+            # print(self.m_buffer)
+            return self.m_buffer
+
+        def create_tree(self):
+            bit = self.m_input.get_bits(1)
+            if (-1 == bit):
+                raise Exception(
+                    'Unexpected end of the Huffman-compressed stream.')
+            elif bit != 0:
+                v = self.m_token
+                self.m_token += 1
+                if (v > self.tree_size):
+                    raise Exception('Invalid Huffman-compressed stream.')
+                self.lhs[v] = self.create_tree()
+                self.rhs[v] = self.create_tree()
+                return v
+            else:
+                return self.m_input.get_bits(8)
+
+    def extract():
+        def get_scenario_from_origin(data: list) -> list:
+            text_all = []
+            buff = ''
+            cnt = 0
+            # START FIXME
+            for line in data:
+                line = line[:-1]
+                if not line and buff:
+                    buff = buff.replace('[', '')
+                    buff = buff.replace(']', '')
+                    buff = buff.replace('　', '')
+                    text_all.append(buff+'\n')
+                    buff = ''
+                elif line:
+                    if line[0] not in '#:^%\t$ｔ' and not ('a' <= line[0] <= 'z'):
+                        buff += line
+                cnt += 1
+            # END
+
+            return text_all
+        extract_jp(get_scenario_from_origin, 'cp932')
+
+
+class RPM():
+    '''
+    exe 只需要改 createfont 80
+
+    0-4 filecount
+    4-8 isconpressed 0|1
+
+    struct ARCHDR {
+        unsigned long entry_count;
+        unsigned long unknown;
+    };
+
+    struct ARCENTRY {
+        char          filename[32];
+        unsigned long original_length;
+        unsigned long length;
+        unsigned long offset;
+    };
+    '''
+    '''
+    def guess_scheme(index_offset: int, possible_name_sizes: list, m_file: bytes, m_count: int):
+        first_entry = m_file[index_offset:possible_name_sizes[0] + 12+index_offset]
+        key_bits = [0, 0, 0, 0]
+        actual_offset = [0, 0, 0, 0]
+        for name_length in possible_name_sizes:
+            first_offset = index_offset + m_count*(name_length+12)
+            actual_offset = to_bytes(first_offset, 4)
+
+            for i in range(4):
+                key_bits[i] = first_entry[name_length+8+i]-actual_offset[i]
+                key_bits[i] = byte_add(key_bits[i])
+
+            first_match = RPM.reverse_find(
+                first_entry, name_length-4, key_bits)
+            # print(first_match)
+            if first_match < 4:
+                continue
+            second_match = RPM.reverse_find(
+                first_entry, first_match-4, key_bits)
+            if second_match <= 0:
+                continue
+            key_length = first_match - second_match
+            key = [0]*key_length
+            print(key_length, first_match, second_match, key_bits)
+            for i in range(key_length):
+                sym = byte_add(-first_entry[second_match+i])
+                if sym < 0x21 or sym > 0x75:
+                    break
+                key[(second_match+i) % key_length] = sym
+            if i == key_length:
+                return (key, name_length)
+
+    def reverse_find(array: bytes, pos: int, pattern: list):
+        print(list(map(hex, array)), '\n', pos, '\n', list(map(hex, pattern)))
+        pattern_end_pos = len(pattern)-1
+        pattern_pos = pattern_end_pos
+        i = pos + pattern_pos
+        while i >= 0:
+            if array[i] == pattern[pattern_pos]:
+                if 0 == pattern_pos:
+                    return i
+                pattern_pos -= 1
+            elif pattern_end_pos != pattern_pos:
+                i += (pattern_end_pos - pattern_pos)
+                pattern_pos = pattern_end_pos
+            i -= 1
+        return -1
+
+    def decrypt_index(data: bytes, key: list):
+        data = bytearray(data)
+        for i in range(len(data)):
+            data[i] = byte_add(data[i], key[i % len(key)])
+        return bytes(data)
+
+    def read_index(offset: int, scheme: tuple, m_count: int, m_file: bytes):
+        index_size = m_count * (scheme[1]+12)
+        index = m_file[offset:offset+index_size]
+        index = RPM.decrypt_index(index, scheme[0])
+
+        return index
+
+    def unpack_arc(path='msg.arc', key='NTR', name_length=0x20):
+        data = open_file_b(path)
+        m_count = from_bytes(data[:4])
+        # scheme = RPM.guess_scheme(8, [0x20,0x18], data, m_count)
+        scheme = [list(map(ord, key)), name_length]
+
+        print(scheme)
+        index = RPM.read_index(8, scheme, m_count, data)
+        c = LzssCompressor()
+        pos = 0
+        while pos < len(index):
+            name = index[pos:pos+name_length]
+            name = delete_zero(name, 'cp932')
+            pos += name_length
+            _out_length = from_bytes(index[pos:pos+4])
+            pos += 4
+            _length = from_bytes(index[pos:pos+4])
+            pos += 4
+            _offset = from_bytes(index[pos:pos+4])
+            pos += 4
+            _data = data[_offset:_offset+_length]
+            _data = c.decompres(_data, _out_length)
+            print(name, len(name), len(_data))
+            save_file_b(f'input/{name}', _data)
+    '''
+    def formate(text:str):
+        tags = re.findall(r'<WinRubi.*?>', text)
+        for t in tags:
+            p = t.find(',')
+            name = t[9:p]
+            text = text.replace(t, name, 1)
+        return text
+
+    def repack_arc(key='NTR', name_length=0x20):
+        key = list(map(ord, key))
+        file_all = os.listdir('output')
+        index = [to_bytes(len(file_all), 4)+b'\x00\x00\x00\x00']
+        data = []
+        data_offset = 8+len(file_all)*(name_length+12)
+        for f in file_all:
+            _file = open_file_b(f'output/{f}')
+            data.append(_file)
+            _name = f.encode('cp932')
+            if len(_name) < name_length:
+                _name += b'\x00' * (name_length-len(_name))
+            _name += to_bytes(len(_file),4)*2
+            _name += to_bytes(data_offset, 4)
+            index.append(_name)
+            data_offset += len(_file)
+        index += data
+        output_data = b''.join(index)
+        output_data = bytearray(output_data)
+        index_length = len(file_all)*(name_length+12)
+        for pos in range(index_length):
+            # print(output_data[pos+8] , key[pos%len(key)])
+            output_data[pos+8] = (output_data[pos+8] - key[pos%len(key)]) & 0xff
+        save_file_b('msg.arc', output_data)
         
 
 
 if __name__ == "__main__":
     # print(SNL._split_line('えっ！？いや、そんなつもりは‥‥ないけど。'))
     # SNL.create_dict()
+
     # DXLib.extract_med()
-    # YU_RIS.output_ybn()
     # DXLib.create_key(b'\xC8\xFD\xFC\xFD\xC8\xB5\xBA\xB9\xC4\xCC\xFD\xFC\xC1\xB8\xBA\xB9\xC8\xBB\xC4\xBA')
     # DXLib.decode_mes()
-    # ANIM.extract_dat()
-    # ANIM.encrypt('intermediate_file/kabe_sce.dat')
-    ANIM.output()
-    
+
+    # ANIM.extract()
+    # ANIM.output()
+
+    # Lilim.extract()
+
+    # PAC.extract_srp()
+    # PAC.replace_srp()
+    # PAC.repack_pac()
+
+    # RPM.unpack_arc()
+    # RPM.repack_arc()
+    # print(RPM.formate('　なあ、<WinRubi 福永,ふくなが><WinRubi 裕人,ゆうと>よ！！」'))
+
+    pass
