@@ -7,12 +7,14 @@
 
 
 # YU-ris
-替换错误导致循环！！！！！！！！！
+幸仁 09 00 00 00 
 
 # .aos
 1. 表示文字列が不正です
 2. 初回起動時はディスクが必要です。「風雷戦姫\u3000神夢」のオリジナルディスクを入れてください。
 
+所有的中文都只拿了第一个字节
+在复制完字符串后，还会对已经字符串继续处理
 
 ## 即指
 x32dbg EC1000
@@ -39,9 +41,10 @@ IDA    401000
 \*(_DWORD \*)(dword_76CDFC[\*(_DWORD \*)arglist] + 4 \* i) = *(_DWORD *)(entry_offset + handle + entry_length - 8);// int32 length
 \*(_DWORD \*)(dword_76CDF0[\*(_DWORD \*)arglist] + 4 \* i) = *(_DWORD *)(handle + entry_offset + entry_length - 4);// int32 offset
 
-5c 695 5489
-2d 7ef 5b1e
-69 a4ca 631c
+光翼战姬1
+「………………て……きて……
+声が聞こえた。
+聞き慣れた声が。
 
 GB2312_CHARSET = 134
 SHIFTJIS_CHARSET = 128
@@ -104,3 +107,5 @@ logfont -> createfontindirecta -> getglyphoutline
 flow 【001 僕とエータと】·いつものようにエータが遊びに来た。エータはお母さんが気になる様子。そして今度は僕がエータの家に遊びに行って…
 spFlowChartButton
 extra【回想01 拓己:逃げ出した先でモミモミコスコス】二人の行為を見て飛び出した先で、おばさんと出会う。感極まった僕はおばさんのおっぱいを…。
+
+80- a0

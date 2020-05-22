@@ -5,10 +5,11 @@ import json
 from Crypto.Cipher import AES  
 import chardet
 import sqlite3
+import random
 from pdb import set_trace as int3
 from struct import unpack, pack
-from baidufanyi import translate as baidu_t
-from tencentfanyi import translate as tencent_t
+from scr.baidufanyi import translate as baidu_t
+from scr.tencentfanyi import translate as tencent_t
 
 
 def _init_():
@@ -25,12 +26,12 @@ _init_()
 def convert_code(to_code: str):
     file_all = os.listdir('input')
     for f in file_all:
-        _data = pf.open_file_b(f'input/{f}')
+        _data = open_file_b(f'input/{f}')
         _code = chardet.detect(_data)['encoding']
         print(_code, f)
         _data = _data.decode(_code)
         _data = _data.encode(to_code)
-        pf.save_file_b(f'input/{f}', _data)
+        save_file_b(f'input/{f}', _data)
 
 
 def get_scenario_from_TyranoBuilder(data: list) -> list:
@@ -281,14 +282,14 @@ def new_translate(text, db=None):
     ans = ''
     if not ans:
         ans = tencent_t(text)
-        if not ans or ans.count('不知道怎么说'):
+        if not ans or ans.count('不知道怎么说') or ans.count('>'):
             ans = baidu_t(text)
         if ans:
             to_database(text, ans, db)
     return ans
 
 
-def _translate(text: str, db=None, delete_func=None) -> str:
+def _translate(text: str, db=None, delete_func=None, jp_chs=None) -> str:
     '''
     首先删除不必要的符号
     切割语句
@@ -306,8 +307,11 @@ def _translate(text: str, db=None, delete_func=None) -> str:
                 pun = text[pun_positon]
                 if pun in ('？', '！', '。'):
                     _text += pun
-            # 交给机器翻译
-            ans = new_translate(_text, db)
+            # 交给机器翻译, 如果本地存在已经翻译的句子则直接使用本地翻译
+            if jp_chs and _text in jp_chs and jp_chs[_text]:
+                ans = jp_chs[_text]
+            else:
+                ans = new_translate(_text, db)
             if ans:
                 # 去掉翻译结果里的标点
                 if ans[-1] in ('？', '！', '。', '!', '?', '.'):
@@ -339,7 +343,7 @@ def translate(delete_func=None, interval=30):
     conn = sqlite3.connect('data/data.db')
     for key in data:
         if not data[key] or key == data[key] or has_jp(data[key]):
-            ans = _translate(key, conn, delete_func)
+            ans = _translate(key, conn, delete_func, data)
             if ans:
                 data[key] = ans
             else:
@@ -429,21 +433,13 @@ def split_line(text: str) -> list:
     '''
     用正则表达式切割文本，遇到'「', '」', '…', '。', '，', '―', '”', '“', '☆', '♪', '、', '‘', '’', '』', '『', '　', 
     '''
-    split_str = r'\[.*?\]|<.+?>|[a-z0-9A-Z]|,|\\n|\||「|」|…+|。|@|』|『|　|―+|）|（|・|？|！|★|☆|♪|※|\\|“|”|"|\]|\[|\/|\;|【|】'
+    split_str = r'\[.*?\]|<.+?>|[a-z0-9A-Z]|,|\\n|\||「|」|…+|。|@|＠|』|『|　|―+|）|（|・|？|！|★|☆|♪|※|\\|“|”|"|\]|\[|\/|\;|【|】'
     _text_list = re.split(split_str, text)
     _ans = []
     for i in _text_list:
         if i:
             _ans.append(i)
     return _ans
-
-
-def delete_label(text: str) -> str:
-    '''
-    删除文本里面的标签
-    '''
-    label_str = r'<.+?>'
-    return re.sub(label_str, '', text)
 
 
 def open_json(path):
@@ -602,6 +598,7 @@ def delete_zero(name: bytes, encoding='utf8'):
     while not name[-1]:
         name = name[:-1]
     return name.decode(encoding)
+
 
 
 class LzssCompressor():
@@ -1066,6 +1063,21 @@ class XFL():
 class LIVEMAKER():
     '''
     提取LIVAMEKER的文本，处理字典提高VNR命中率
+    .lsb
+    header
+    0-4  version
+    4-5    unk
+    5-9  count
+    9-13 size
+
+    entry
+
+    body
+    0-1  opcode
+    1-5  indent
+    5-6  mute
+    6-7  not_update
+    7-11 line_number
     '''
     def get_text_from_lsb():
         for f in os.listdir('input'):
@@ -1127,9 +1139,21 @@ class LIVEMAKER():
 class YU_RIS():
     '''
     解密ybn，提取文本，插入文本，加密ybn
+
+    ver 290:
+    4Byte length 4Byte offset
+    1. 0x14 4c6aa 0xfa
+    2. 0x2c 4c6be 0x10e
+    3. 0x50       0x13a
+    4. 0x56       0x18a
+    5. 0x54       0x1e0
+    6. 0x22
+
+    name 
+    1. 0x08 0xab
     '''
-    def decode_473(file_name):
-        dec_tbl2 = [0xd3, 0x6f, 0xac, 0x96]
+    def decode(file_name):
+        
         with open(file_name, 'rb') as f:
             data = f.read()
         header = YU_RIS.create_head_ystb(data)
@@ -1137,6 +1161,11 @@ class YU_RIS():
         if not header or header['magic_8*4'] != 'YSTB':
             print('未知文件：', file_name)
             return None
+
+        if header['version_32'] == 481:
+            dec_tbl2 = [0x0b, 0x8f, 0x00, 0xb1]
+        elif header['version_32'] > 263:
+            dec_tbl2 = [0xd3, 0x6f, 0xac, 0x96]
 
         header_byte = data[:32]
         data = list(data)
@@ -1170,25 +1199,34 @@ class YU_RIS():
         return data, header
 
     def create_head_ystb(data: bytes):
-        header = {
-            'magic_8*4': data[:4].decode(),
-            'version_32': 0,
-            'data1_length_div_4_32': 0,
-            'data1_length_32': 0,
-            'data2_length_32': 0,
-            'data3_length_32': 0,
-            'data4_length_32': 0,
-            'reserved_32': 0
-        }
-        if header['magic_8*4'] != 'YSTB':
+        magic = data[:4].decode()
+        version = from_bytes(data[4:8])
+
+        if magic != 'YSTB':
             return None
-        cnt = 1
-        for key in header:
-            if key == 'magic_8*4':
-                continue
-            header[key] = int.from_bytes(
-                data[cnt*4:cnt*4+4], byteorder='little')
-            cnt += 1
+        
+        if version >= 450:
+            header = {
+                'magic_8*4': magic,
+                'version_32': version,
+                'data1_length_div_4_32': from_bytes(data[8:12]),   # 函数数量
+                'data1_length_32': from_bytes(data[12:16]),        # 函数段
+                'data2_length_32': from_bytes(data[16:20]),        # 参数段
+                'data3_length_32': from_bytes(data[20:24]),        # 数据段
+                'data4_length_32': from_bytes(data[24:28]),        # 未知段
+                'reserved_32': from_bytes(data[28:32])
+            }
+        elif version > 263:
+            header = {
+                'magic_8*4': magic,
+                'version_32': version,
+                'data1_length_32': from_bytes(data[8:12]),
+                'data2_length_32': from_bytes(data[12:16]),
+                'data2_offset_32': from_bytes(data[16:20]),
+                'data3_length_32': from_bytes(data[20:24]),
+                'data4_length_32': from_bytes(data[24:28]),
+                'reserved_32': from_bytes(data[28:32])
+            }
         return header
 
     def create_ystb473_method_t(data: bytes):
@@ -1297,34 +1335,78 @@ class YU_RIS():
                 return ans
 
         if not data:
-            return
+            return None, None
         header = YU_RIS.create_head_ystb(data)
         if not header:
-            return None
-
-        body = YU_RIS.cut_ybn(data, header)
-        all_methord = YU_RIS.cut_by_len(
-            body['methord'], 4, YU_RIS.create_ystb473_method_t)
-        all_parameter = YU_RIS.cut_by_len(
-            body['parameter'], 12, YU_RIS.create_ystb473_parameter_t)
-        methord_code = []
-        for i in all_methord:
-            methord_code += [i['code_8'] for x in range(i['args_8'])]
+            return None, None
 
         ans = []
-        for i in range(len(all_parameter)):
-            # 提取字符串
-            _p = all_parameter[i]['char_offset_32']
-            all_parameter[i]['str'] = body['str'][_p: _p +
-                                                  all_parameter[i]['char_count_32']]
-            _str = extract(all_parameter[i]['str'])
-            if methord_code[i] == 91:
-                ans.append(_str)
-            _str = _extract_button(all_parameter[i]['str'])
-            if _str and methord_code[i] == 29:
-                ans.append(_str)
+        method = []
+        if header['version_32'] >= 450:
+            body = YU_RIS.cut_ybn(data, header)
+            all_methord = YU_RIS.cut_by_len(
+                body['methord'], 
+                4, 
+                YU_RIS.create_ystb473_method_t
+            )
+            all_parameter = YU_RIS.cut_by_len(
+                body['parameter'], 
+                12, 
+                YU_RIS.create_ystb473_parameter_t
+            )
+            methord_code = []
+            for i in all_methord:
+                methord_code += [i['code_8'] for x in range(i['args_8'])]
 
-        return ans
+            for i in range(len(all_parameter)):
+                # 提取字符串
+                _p = all_parameter[i]['char_offset_32']
+                all_parameter[i]['str'] = body['str'][_p: _p + all_parameter[i]['char_count_32']]
+                _str = extract(all_parameter[i]['str'])
+                
+                # if _str in ['店長に言われ、俺は店の看板の電気を消した。', '小次郎「一平くん、そろそろお店をしめよう」']:
+                #     print(methord_code[i], _str)
+                if header['version_32'] == 481:
+                    scenario_code, button_code = 106, 44
+                elif header['version_32'] == 500:
+                    scenario_code, button_code = 90, 29
+                else:
+                    scenario_code, button_code = 91, 29
+        
+                if methord_code[i] == scenario_code:
+                    ans.append(_str)
+                    continue
+                _str = _extract_button(all_parameter[i]['str'])
+                if _str and methord_code[i] == button_code:
+                    method.append(_str)
+        elif header['version_32'] > 263:
+            ptr = 0x20
+            while ptr < header['data2_offset_32']:
+                if data[ptr:ptr+2] == b'\x54\x01' and data[ptr+5:ptr+10] == b'\x00\x00\x00\x00\x00':
+                    ptr += 0x0A
+                    _length = from_bytes(data[ptr:ptr+4])
+                    _offset = from_bytes(data[ptr+4:ptr+8])+header['data2_offset_32']
+                    # print(data[_offset:_offset+_length], _length, _offset)
+                    _str = data[_offset:_offset+_length].decode('cp932')
+                    
+                    ans.append(_str)
+                    ptr += 18
+                elif data[ptr:ptr+2] == b'\x03\x00':
+                    ptr += 2
+                    _length = from_bytes(data[ptr:ptr+4])
+                    _offset = from_bytes(data[ptr+4:ptr+8])+header['data2_offset_32']
+                    ptr += 8
+                    if _offset < len(data) and data[_offset] == 0x4d:
+                        try:
+                            _str = data[_offset+4:_offset+_length-1].decode('cp932')
+                            if _has_jp(_str):
+                                method.append(_str)
+                        except Exception as e:
+                            pass
+                else:
+                    ptr += 1
+
+        return ans, method
 
     def create_parameter_bytes(para: list):
         ans = b''
@@ -1333,16 +1415,6 @@ class YU_RIS():
             ans += int.to_bytes(i['char_count_32'], 4, byteorder='little')
             ans += int.to_bytes(i['char_offset_32'], 4, byteorder='little')
         return ans
-
-    def can_decoded_gb2312(data: str):
-        ans = True
-        try:
-            for i in data:
-                i.encode('gb2312')
-        except Exception as e:
-            ans = False
-        finally:
-            return ans
 
     def replace_string(data: bytes, jp_chs: dict):
         '''
@@ -1400,7 +1472,14 @@ class YU_RIS():
 
         failed = []
         cnt = 0
-
+        if header['version_32'] == 481:
+            scenario_code, button_code = 106, 44
+        elif header['version_32'] == 500:
+            scenario_code, button_code = 90, 29
+        else:
+            scenario_code, button_code = 91, 29
+        
+            
         for i in range(len(all_parameter)):
             _para = all_parameter[i]
             _para['index'] = i
@@ -1409,8 +1488,7 @@ class YU_RIS():
             if len(_para['str']) < _para['char_count_32']:
                 _cnt = _para['char_count_32'] - len(_para['str'])
                 _para['str'] += b'\x00' * _cnt
-            # _para['char_count_32'] = len(_para['str'])
-            if methord_code[i] == 91 and _para['un_32'] == 0:
+            if methord_code[i] == scenario_code and _para['un_32'] == 0:
                 _key = _para['str'].decode('cp932')
                 if _key in jp_chs and jp_chs[_key]:
                     _para['str'] = jp_chs[_key].encode('gbk', errors='ignore')
@@ -1419,16 +1497,13 @@ class YU_RIS():
                 else:
                     failed.append(_key)
             _key = _extract_button(_para['str'])
-            if _key and methord_code[i] == 29:
-                # print(_key, key in jp_chs)
+            if _key and methord_code[i] == button_code:
                 if _key in jp_chs and jp_chs[_key]:
                     _str = b'\x22' + \
                         jp_chs[_key].encode('gbk', errors='ignore')+b'\x22'
-                    _para['str'] = b'\x4d' + \
-                        int.to_bytes(len(_str), 2, byteorder='little')
+                    _para['str'] = b'\x4d' + to_bytes(len(_str), 2)
                     _para['str'] += _str
                     _para['char_count_32'] = len(_para['str'])
-                    # print(_para['str'])
                     cnt += 1
                 else:
                     failed.append(_key)
@@ -1483,6 +1558,72 @@ class YU_RIS():
 
         return (ans, cnt, failed)
 
+    def replace_string_2(data:bytes, jp_chs:dict):
+        def _has_jp(line: str) -> bool:
+            '''
+            如果含有日文文字（除日文标点）则认为传入文字含有日文, 返回true
+            '''
+            for ch in line:
+                if (ch >= '\u0800' and ch < '\u9fa5') or ('\u4e00' <= ch and ch <= '\u9fa5'):
+                    return True
+            return False
+        # methord = data[0x20:header['data2_offset_32']]
+        if data[:4] != b'YSTB':
+            return None, 0, []
+        data = bytearray(data)
+        data_offset = from_bytes(data[16:20])
+        data_length = from_bytes(data[12:16])
+        ptr = 0x20
+        str_p = data_length
+        cnt = 0
+        failed = []
+        while ptr < data_offset:
+            if data[ptr:ptr+2] == b'\x54\x01' and data[ptr+5:ptr+10] == b'\x00\x00\x00\x00\x00':
+                ptr += 0x0A
+                _length = from_bytes(data[ptr:ptr+4])
+                _offset = from_bytes(data[ptr+4:ptr+8])+data_offset
+                # print(data[_offset:_offset+_length], _length, _offset)
+                _str = data[_offset:_offset+_length].decode('cp932')
+                if _str in jp_chs and jp_chs[_str]:
+                    _value = jp_chs[_str].encode('gbk', errors='ignore')
+                    data += _value
+                    data[ptr:ptr+4] = to_bytes(len(_value), 4)
+                    data[ptr+4:ptr+8] = to_bytes(str_p, 4)
+                    str_p += len(_value)
+                    data_length += len(_value)
+                    cnt += 1
+                else:
+                    failed.append(_str)
+                ptr += 18
+            elif data[ptr:ptr+2] == b'\x03\x00':
+                ptr += 2
+                _length = from_bytes(data[ptr:ptr+4])
+                _offset = from_bytes(data[ptr+4:ptr+8])+data_offset
+                if _offset < len(data) and data[_offset] == 0x4d:
+                    try:
+                        # print('haha')
+                        _str = data[_offset+4:_offset+_length-1].decode('cp932', errors='ignore')
+                        if _has_jp(_str):
+                            # print(_str)
+                            if _str in jp_chs and jp_chs[_str]:
+                                _t = jp_chs[_str].encode('gbk', errors='ignore')
+                                _value = b'\x4d'+ to_bytes(len(_t)+2, 2) + b'\x22' + _t + b'\x22'
+                                data += _value
+                                data[ptr:ptr+4] = to_bytes(len(_value), 4)
+                                data[ptr+4:ptr+8] = to_bytes(str_p, 4)
+                                ptr += 8
+                                str_p += len(_value)
+                                data_length += len(_value)
+                                cnt += 1
+                            else:
+                                failed.append(_str)
+                    except Exception as e:
+                        pass
+            else:
+                ptr += 1
+        data[12:16] = to_bytes(data_length, 4)
+        return data, cnt, failed
+
     # extract
     def extract_ybn(path='input'):
         '''
@@ -1494,7 +1635,7 @@ class YU_RIS():
         file_all = os.listdir(path)
         if 'decoded' not in file_all:
             for f in file_all:
-                _t = YU_RIS.decode_473(f'{path}/{f}')
+                _t = YU_RIS.decode(f'{path}/{f}')
                 if _t:
                     save_file_b(f'{path}/{f}', _t[0])
                     print(f'decode {f}')
@@ -1505,16 +1646,20 @@ class YU_RIS():
             print('文件已经解密！')
 
         jp_all = []
+        method = []
         file_all = os.listdir(path)
         for f in file_all:
-            _text = YU_RIS.ybn_script_export_string(
+            _text, _method = YU_RIS.ybn_script_export_string(
                 open_file_b(f'{path}/{f}'), YU_RIS._extract_string)
-            if _text:
-                print(f, len(_text))
+            if _text or _method:
+                print(f, len(_text)+len(_method))
                 jp_all += _text
+                method += _method
             else:
                 print(f'不存在文本：{f}')
         # jp_chs = {}
+        jp_all.append('  ')
+        jp_all += method
         with open('intermediate_file/jp_all.txt', 'w', encoding='utf8') as f:
             for line in jp_all:
                 f.write(line+'\n')
@@ -1523,7 +1668,7 @@ class YU_RIS():
         # save_json('intermediate_file/jp_chs.json', jp_chs)
 
     # output
-    def output_ybn(_input='input', output='output', jp_chs='intermediate_file/jp_chs.json'):
+    def output_ybn(_input='input', output='output', jp_chs='intermediate_file/jp_chs.json', encrypt=True):
         '''
         1. 替换input文件夹内ybn的字符串，使用gbk编码，保存到output文件夹内
         2. 加密output文件夹内的ybn文件
@@ -1532,7 +1677,17 @@ class YU_RIS():
         file_all = os.listdir(_input)
         jp_chs = open_json(jp_chs)
         for f in file_all:
-            _t = YU_RIS.replace_string(open_file_b(f'{_input}/{f}'), jp_chs)
+            data = open_file_b(f'{_input}/{f}')
+            version = from_bytes(data[4:8])
+            # print(version)
+            if not version:
+                continue
+            if version >= 450:
+                _t = YU_RIS.replace_string(data, jp_chs)
+            elif version > 263:
+                _t = YU_RIS.replace_string_2(data, jp_chs)
+            else:
+                _t = [None,0,None]
             failed += _t[-1]
             if _t[2]:
                 # print(f, "失败：", len(_t[2]))
@@ -1543,15 +1698,17 @@ class YU_RIS():
                     os.mkdir(output)
                 save_file_b(f'{output}/{f}', _t[0])
         save_json('intermediate_file/failed.json', failed)
+        print('失败：', len(failed))
 
         file_all = os.listdir(output)
-        for f in file_all:
-            _t = YU_RIS.decode_473(f'{output}/{f}')
-            if _t:
-                save_file_b(f'{output}/{f}', _t[0])
-                print(f'encode {f}')
-            else:
-                print(f'can not encode {f}')
+        if encrypt:
+            for f in file_all:
+                _t = YU_RIS.decode(f'{output}/{f}')
+                if _t:
+                    save_file_b(f'{output}/{f}', _t[0])
+                    print(f'encode {f}')
+                else:
+                    print(f'can not encode {f}')
 
 
 class PAC():
@@ -1603,7 +1760,7 @@ class PAC():
             print(f, cnt, cnt2)
         save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
 
-    def replace_srp():
+    def output_srp():
         def _format(s: str):
             count = s.count(',')
             if count == 0:
@@ -1765,49 +1922,142 @@ class PAC():
 
 
 class NEKOSDK():
+    '''
+    cmp al,0x81
+    createfontA push 0x80 
+    '''
     def extract_pak_txt():
         file_all = os.listdir('input')
         ans = []
-        exist = set()
-        name = set()
+
         for f in file_all:
             data = open_file_b(f'input/{f}')
             p = 0
-            while p < len(data)-8:
-                if data[p:p+0x60] == b'\x05\x00\x00\x00\x64\x00\x00\x00'+b'\x00'*0x58:
-                    p += 0xc8
-                    _len = int.from_bytes(data[p:p+4], byteorder='little')
-                    while _len != 1 and _len <= 0xff:
-                        p += 4
-                        _str = data[p:p+_len-1].decode('cp932')
-                        _str = re.sub(
-                            r'voice\\.+ogg|\r|\n|\[テキスト表示\]| |　', '', _str)
-                        _p = _str.find('「')
-                        if _p != -1 and _p < 6:
-                            name.add(_str[:_p])
-                            _str = _str[_p:]
-
-                        if _str == '「おいおいおい、忘れたなんて言わせねぇぞ？\n':
-                            print(ans)
-                        if not ans or (ans[-1].find(_str) == -1 and _str not in name):
-                            # ans.append(str(p)+' '+str(_len)+ ' '+ _str)
-                            ans.append(_str)
-                            # exist.add(_str)
-
-                        p += _len
-                        _len = int.from_bytes(data[p:p+4], byteorder='little')
-                    p += 1
-                else:
-                    p += 1
+            while p < len(data):
+                if data[p:p+0xe] == b'\x5B\x83\x65\x83\x4C\x83\x58\x83\x67\x95\x5C\x8E\xA6\x5D':
+                    p -= 4
+                    _len = from_bytes(data[p:p+4])
+                    p += (_len + 4)
+                    _len1 = from_bytes(data[p:p+4])
+                    p+=4
+                    _str = data[p:p+_len1-1].decode('cp932')
+                    if _str:
+                        ans.append(_str)
+                    p+=_len1
+                    _len2 = from_bytes(data[p:p+4])
+                    p+=4
+                    ans.append(data[p:p+_len2-1].decode('cp932'))
+                    p+=_len2
+                p += 1
         save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
-        print(name)
+        jp_chs = dict()
+        for i in ans:
+            jp_chs[i] = ''
+        save_json('intermediate_file/jp_chs.json', jp_chs)
+
+    def output():
+        def new_str(text:str):
+            if len(text) > 10:
+                _t = random.randint(-3,5)
+                if _t > 0:
+                    text += '你'*_t
+                elif _t < 0:
+                    text = text[:_t]
+            return text
+        file_all = os.listdir('input')
+        failed = []
+        cnt = 0
+        jp_chs = open_json('intermediate_file/jp_chs.json')
+        for f in file_all:
+            data = open_file_b(f'input/{f}')
+            data = bytearray(data)
+            p = 0
+            while p < len(data):
+                if data[p:p+0xe] == b'\x5B\x83\x65\x83\x4C\x83\x58\x83\x67\x95\x5C\x8E\xA6\x5D':
+                    p -= 4
+                    _len = from_bytes(data[p:p+4])
+                    p += (_len + 4)
+
+                    _len1 = from_bytes(data[p:p+4])
+                    
+                    _str = data[p+4:p+3+_len1]
+                    _str = _str.decode('cp932')
+                    if _str in jp_chs and jp_chs[_str]:
+                        _str = jp_chs[_str]
+                        _str = _str.encode('gbk', errors='ignore')
+                        data[p:p+4] = to_bytes(len(_str)+1, 4)
+                        data[p+4:p+3+_len1] = _str
+                        cnt += 1
+                        p+=(len(_str)+1)
+                    else:
+                        failed.append(_str)
+                        p+=_len1
+                    p+=4
+                    
+                    _len2 = from_bytes(data[p:p+4])
+                    
+                    _str = data[p+4:p+3+_len2]
+                    _str = _str.decode('cp932')
+                    if _str in jp_chs and jp_chs[_str]:
+                        # _str = new_str(_str)
+                        _str = jp_chs[_str]
+                        _str = _str.encode('gbk', errors='ignore')
+                        data[p:p+4] = to_bytes(len(_str)+1, 4)
+                        data[p+4:p+3+_len2] = _str
+                        cnt += 1
+                        p+=(len(_str)+1)
+                    else:
+                        failed.append(_str)
+                        p+=_len2
+                    p+=4
+                p += 1
+            save_file_b(f'output/{f}', data)
+        print('替换：', cnt, '\n失败：', len(failed))
+        save_file('intermediate_file/failed.txt', '\n'.join(failed))
 
 
 class SILKY():
-    def extract_mes():
+    '''
+    create mode: %s c in.mes in.txt out.mes
+    exe 修改
+    createfontindirecta 0x80000000 -> 0x86000000
+    所有的 cmp al,0x9f cmp bl,0x9f cmp cl,0x9f cmp al,0xa0
+    '''
+    def extract():
         file_all = os.listdir('input')
+        if not os.path.exists('silky_text'):
+            os.mkdir('silky_text')
         for f in file_all:
-            os.system(f'mestool.exe p input/{f} intermediate_file/{f}')
+            os.system(f'mestool.exe p input/{f} silky_text/{f}')
+        
+        file_all = os.listdir('silky_text')
+        ans = []
+        for f in file_all:
+            ans += open_file_b(f'silky_text/{f}').decode('cp932').splitlines()
+        save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
+
+    def output():
+        
+        jp_chs = open_json('intermediate_file/jp_chs.json')
+        failed = []
+        cnt = 0
+        if not os.path.exists('silky_chs'):
+            os.mkdir('silky_chs')
+        file_all = os.listdir('silky_text')
+        for f in file_all:
+            data = open_file_b(f'silky_text/{f}').decode('cp932').splitlines()
+            for index, line in enumerate(data):
+                if line in jp_chs and jp_chs[line]:
+                    data[index] = jp_chs[line]
+                    cnt += 1
+                else:
+                    failed.append(line)
+            save_file_b(f'silky_chs/{f}', '\n'.join(data).encode('gbk', errors='ignore'))
+        save_file('intermediate_file/failed.txt', '\n'.join(failed))
+        print(f'替换：{cnt}\n失败：{len(failed)}')
+        file_all = os.listdir('silky_chs')
+        for f in file_all:
+            os.system(f'exe\\mestool.exe c input/{f} silky_chs/{f} output/{f}')
 
     def cut_MES(path: str):
         '''
@@ -1946,7 +2196,7 @@ class DXLib():
     key: b'\xd0\xcf\xcd\x9b\x88\x8d\x8c\x97\x9f\xbf\x94\x8b\x8d\x8c\x9b\x8e\x97\x8d\x9b'
 
     '''
-    key = b'\xd0\xcf\xcd\x9b\x88\x8d\x8c\x97\x9f\xbf\x94\x8b\x8d\x8c\x9b\x8e\x97\x8d\x9b'
+    key = b'\x9b\xd0\xcf\xd0\x9b\x88\x8d\x8c\x97\x9f\xd0\xcf\x94\x8b\x8d\x8c\x9b\x8e\x97\x8d'
 
     def create_key_dx():
         Key = b'\xAA'*12
@@ -1965,14 +2215,32 @@ class DXLib():
         Key[11] = Key[11] ^ 0xcc
         return Key
 
-    def decrypt(_data: bytes):
+    def show_key(data:bytes):
+        data = bytearray(data)
+        print(' '.join(list(map(lambda x:hex(x)[2:], data))))
+        for i in range(len(data)):
+            data[i] = 0xff & (-1*data[i])
+        print(data, data.decode('cp932'))
+        print(' '.join(list(map(lambda x:hex(x)[2:], data))))
+
+    def decrypt(_data: bytes, _key=None):
         '''
 
         '''
+        if _key:
+            DXLib.key = _key
         _data = bytearray(_data)
 
         for i in range(0x10, len(_data)):
             _data[i] = (_data[i]-DXLib.key[(i-0x10) % len(DXLib.key)]) & 0xff
+
+        return _data
+
+    def encrypt(_data: bytes):
+        _data = bytearray(_data)
+
+        for i in range(0x10, len(_data)):
+            _data[i] = (_data[i]+DXLib.key[(i-0x10) % len(DXLib.key)]) & 0xff
 
         return _data
 
@@ -2036,6 +2304,94 @@ class DXLib():
         for i in range(len(a)):
             ans += ('\\x'+hex((b[i]-a[i]) & 0xff)[2:])
         print(ans)
+
+    def unpack(path='md_scr.med', output='input'):
+        def remove_dumplicate_str(key):
+            for i in range(2, len(key)):
+                cnt = int(len(key) / i + 1)
+                tmp = key[:i]
+                ans = bytearray(tmp)
+                tmp *= cnt
+                tmp = tmp[:len(key)]
+                # print(tmp, len(tmp))
+                if tmp == key:
+                    # print(ans)
+                    return ans
+            return None
+        data = open_file_b(path)
+        entry_length = from_bytes(data[4:6])
+        entry_count = from_bytes(data[6:8])
+        name_list = []
+        if not os.path.exists(output):
+            os.mkdir(output)
+        for i in range(entry_count):
+            entry = data[16+i*entry_length:16+(i+1)*entry_length]
+            offset = from_bytes(entry[-4:])
+            length = from_bytes(entry[-8:-4])
+            unk = from_bytes(entry[-12:-8])
+            name = ''
+            for i in entry:
+                if not i:
+                    break
+                else:
+                    name+=chr(i)
+            
+            _file_data = data[offset:offset+length]
+            file_name = f'{name}_{unk}'
+            save_file_b(f'{output}/{file_name}', _file_data)
+            # print(file_name, offset, length)
+            name_list.append(file_name)
+        key = None
+        file_all = os.listdir(output)
+        for f in file_all:
+            if f[:5] == '_VIEW':
+                _view = open_file_b(f'{output}/{f}')
+                _raw = _view[0x10:0x28]
+                _base = b'\x00\x23\x52\x55\x4C\x45\x5F\x56\x49\x45\x57\x45\x52\x00\x3A\x56\x49\x45\x57\x5F\x30\x00\x7B\x00'
+                key = []
+                for i in range(24):
+                    key.append(_raw[i] - _base[i])
+                break
+        if key:
+            print((key))
+            key = bytearray(map(lambda x:x&0xff,key))
+            key = remove_dumplicate_str(key)
+            print(key, len(key))
+            for f in file_all:
+                _data = open_file_b(f'{output}/{f}')
+                _data = DXLib.decrypt(_data, key)
+                save_file_b(f'{output}/{f}', _data)
+            save_json(f'{output}/name_list.json', name_list)
+        else:
+            print('无法解密')
+
+    def repack(path='input'):
+        name_list = open_json(f'{path}/name_list.json')
+        # name_list = os.listdir(path)
+        entry_length = 0x17
+        header = b'MDE0\x17\x00'
+        header += to_bytes(len(name_list), 2) + b'\x00' * 8
+        entry_all = []
+        file_data = []
+        offset = 0x10 + len(name_list)*entry_length
+        
+        for f in name_list:
+            
+            _p = len(f)-1
+            while f[_p] != '_':
+                _p-=1
+            name = f[:_p].encode() 
+            name += b'\x00'*(entry_length-len(name)-12)
+            unk = int(f[_p+1:])
+            unk = to_bytes(unk, 4)
+            _file_data = open_file_b(f'{path}/{f}')
+            _file_data = DXLib.encrypt(_file_data)
+            entry = name + unk + to_bytes(len(_file_data), 4) + to_bytes(offset, 4)
+            entry_all.append(entry)
+            file_data.append(_file_data)
+            offset += len(_file_data)
+        
+        save_file_b('md_scr.med.chs', header + b''.join(entry_all) + b''.join(file_data))
 
 
 class ANIM():
@@ -2292,6 +2648,11 @@ class ANIM():
 
 
 class Lilim():
+    '''
+    createfontindirect 0x80 -> 0x86
+    textouta           cmp al, 0xa0 -> cmp al,0xfe
+    文字检查模块        0x9f -> 0xfe
+    '''
     class BitStream:
         def __init__(self, data: bytes):
             self.m_input = data
@@ -2509,6 +2870,49 @@ class Lilim():
             return text_all
         extract_jp(get_scenario_from_origin, 'cp932')
 
+    def output():
+        def has_jp(line: str) -> bool:
+            '''
+            如果含有日文文字（除日文标点）则认为传入文字含有日文, 返回true
+            '''
+            for ch in line:
+                if ch >= '\u0800' and ch < '\u9fa5':
+                    return True
+            return False
+        file_all = os.listdir('input')
+        jp_chs = open_json('intermediate_file/jp_chs.json')
+        failed = []
+        replaced = []
+        for f in file_all:
+            data = open_file_b(f'input/{f}')
+            
+            if f.count('.scr'):
+                data = data.split(b'\x0d\x0a')
+                cnt = 0
+                for i in data:
+                    i = i.decode('cp932')
+                    if has_jp(i) and (i[0] not in '#sceurmgva%^\t' or i.count('btnset')):
+                        key = i
+                        if i and i in jp_chs and jp_chs[i]:
+                            _str = jp_chs[i]
+                            r = r'~|\(|\)'
+                            if _str.count('btnset') == 0:
+                                _str = re.sub(r,'', _str)
+                            data[cnt] = _str.encode('gbk', errors='ignore')
+                            replaced.append(i+' '+_str)
+                        else:
+                            failed.append(i)
+                    cnt += 1
+                data = b'\x0d\x0a'.join(data) + b'\x0d\x0a'
+
+                # data = Lilim.HuffmanCompressor(data)
+                # data = data.compress()
+            save_file_b(f'output/{f}', data)
+        save_file('intermediate_file/failed.txt', '\n'.join(failed))
+        save_file('intermediate_file/replaced.txt', '\n'.join(replaced))
+        print('成功：', len(replaced))
+        print('失败: ', len(failed))
+
 
 class RPM():
     '''
@@ -2649,27 +3053,3 @@ class RPM():
             output_data[pos+8] = (output_data[pos+8] - key[pos%len(key)]) & 0xff
         save_file_b('msg.arc', output_data)
         
-
-
-if __name__ == "__main__":
-    # print(SNL._split_line('えっ！？いや、そんなつもりは‥‥ないけど。'))
-    # SNL.create_dict()
-
-    # DXLib.extract_med()
-    # DXLib.create_key(b'\xC8\xFD\xFC\xFD\xC8\xB5\xBA\xB9\xC4\xCC\xFD\xFC\xC1\xB8\xBA\xB9\xC8\xBB\xC4\xBA')
-    # DXLib.decode_mes()
-
-    # ANIM.extract()
-    # ANIM.output()
-
-    # Lilim.extract()
-
-    # PAC.extract_srp()
-    # PAC.replace_srp()
-    # PAC.repack_pac()
-
-    # RPM.unpack_arc()
-    # RPM.repack_arc()
-    # print(RPM.formate('　なあ、<WinRubi 福永,ふくなが><WinRubi 裕人,ゆうと>よ！！」'))
-
-    pass
