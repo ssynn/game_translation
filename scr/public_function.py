@@ -23,11 +23,14 @@ def _init_():
 _init_()
 
 
-def convert_code(to_code: str):
+def convert_code(to_code: str, from_code=None):
     file_all = os.listdir('input')
     for f in file_all:
         _data = open_file_b(f'input/{f}')
-        _code = chardet.detect(_data)['encoding']
+        if not from_code:
+            _code = chardet.detect(_data)['encoding']
+        else:
+            _code = from_code
         print(_code, f)
         _data = _data.decode(_code)
         _data = _data.encode(to_code)
@@ -1152,6 +1155,14 @@ class YU_RIS():
     name 
     1. 0x08 0xab
     '''
+    def format_yu_ris(text:str):
+        tags = re.findall(r'≪.+?≫', text)
+        for tag in tags:
+            _t = tag.find('／')
+            name = tag[1:_t]
+            text = text.replace(tag, name)
+        return text
+
     def decode(file_name):
         
         with open(file_name, 'rb') as f:
@@ -1380,25 +1391,28 @@ class YU_RIS():
                 if _str and methord_code[i] == button_code:
                     method.append(_str)
         elif header['version_32'] > 263:
+            data_offset = from_bytes(data[16:20])
+            data_length = from_bytes(data[12:16])
             ptr = 0x20
-            while ptr < header['data2_offset_32']:
+            str_p = data_length
+            cnt = 0
+            failed = []
+            while ptr < data_offset:
                 if data[ptr:ptr+2] == b'\x54\x01' and data[ptr+5:ptr+10] == b'\x00\x00\x00\x00\x00':
                     ptr += 0x0A
                     _length = from_bytes(data[ptr:ptr+4])
-                    _offset = from_bytes(data[ptr+4:ptr+8])+header['data2_offset_32']
+                    _offset = from_bytes(data[ptr+4:ptr+8])+data_offset
                     # print(data[_offset:_offset+_length], _length, _offset)
                     _str = data[_offset:_offset+_length].decode('cp932')
-                    
                     ans.append(_str)
                     ptr += 18
                 elif data[ptr:ptr+2] == b'\x03\x00':
                     ptr += 2
                     _length = from_bytes(data[ptr:ptr+4])
-                    _offset = from_bytes(data[ptr+4:ptr+8])+header['data2_offset_32']
-                    ptr += 8
+                    _offset = from_bytes(data[ptr+4:ptr+8])+data_offset
                     if _offset < len(data) and data[_offset] == 0x4d:
                         try:
-                            _str = data[_offset+4:_offset+_length-1].decode('cp932')
+                            _str = data[_offset+4:_offset+_length-1].decode('cp932', errors='ignore')
                             if _has_jp(_str):
                                 method.append(_str)
                         except Exception as e:
@@ -1567,7 +1581,6 @@ class YU_RIS():
                 if (ch >= '\u0800' and ch < '\u9fa5') or ('\u4e00' <= ch and ch <= '\u9fa5'):
                     return True
             return False
-        # methord = data[0x20:header['data2_offset_32']]
         if data[:4] != b'YSTB':
             return None, 0, []
         data = bytearray(data)
@@ -1582,7 +1595,6 @@ class YU_RIS():
                 ptr += 0x0A
                 _length = from_bytes(data[ptr:ptr+4])
                 _offset = from_bytes(data[ptr+4:ptr+8])+data_offset
-                # print(data[_offset:_offset+_length], _length, _offset)
                 _str = data[_offset:_offset+_length].decode('cp932')
                 if _str in jp_chs and jp_chs[_str]:
                     _value = jp_chs[_str].encode('gbk', errors='ignore')
@@ -1601,10 +1613,8 @@ class YU_RIS():
                 _offset = from_bytes(data[ptr+4:ptr+8])+data_offset
                 if _offset < len(data) and data[_offset] == 0x4d:
                     try:
-                        # print('haha')
                         _str = data[_offset+4:_offset+_length-1].decode('cp932', errors='ignore')
                         if _has_jp(_str):
-                            # print(_str)
                             if _str in jp_chs and jp_chs[_str]:
                                 _t = jp_chs[_str].encode('gbk', errors='ignore')
                                 _value = b'\x4d'+ to_bytes(len(_t)+2, 2) + b'\x22' + _t + b'\x22'
@@ -1697,7 +1707,7 @@ class YU_RIS():
                 if not os.path.exists(output):
                     os.mkdir(output)
                 save_file_b(f'{output}/{f}', _t[0])
-        save_json('intermediate_file/failed.json', failed)
+        save_file('intermediate_file/failed.txt', '\n'.join(failed))
         print('失败：', len(failed))
 
         file_all = os.listdir(output)

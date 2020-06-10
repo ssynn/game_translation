@@ -32,6 +32,6 @@ if __name__ == "__main__":
     # SILKY.extract_mes()
     # SILKY.output()
 
-    YU_RIS.extract_ybn()
-    # YU_RIS.output_ybn(encrypt=1)
+    # YU_RIS.extract_ybn()
+    YU_RIS.output_ybn(encrypt=1)
     pass
