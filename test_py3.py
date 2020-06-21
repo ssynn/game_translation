@@ -15,8 +15,9 @@ if __name__ == "__main__":
     # ANIM.extract()
     # ANIM.output()
 
-    # Lilim.extract()
-    # Lilim.output()
+    # Lilim.extract_for_hook_aos2()
+    # Lilim.fix_dixt()
+    Lilim.output_hook_dict()
 
     # PAC.extract_srp()
     # PAC.replace_srp()
@@ -33,5 +34,5 @@ if __name__ == "__main__":
     # SILKY.output()
 
     # YU_RIS.extract_ybn()
-    YU_RIS.output_ybn(encrypt=1)
+    # YU_RIS.output_ybn(encrypt=1)
     pass

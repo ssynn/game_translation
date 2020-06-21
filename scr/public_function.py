@@ -23,7 +23,26 @@ def _init_():
 _init_()
 
 
+def strB2Q(ustring, exclude=()):
+    """半角转全角"""
+    rstring = ""
+    for uchar in ustring:
+        inside_code=ord(uchar)
+        if inside_code == 32:                                 #半角空格直接转化                  
+            inside_code = 12288
+        elif inside_code >= 32 and inside_code <= 126:        #半角字符（除空格）根据关系转化
+            inside_code += 65248
+        if uchar in exclude:
+            rstring += uchar
+        else:
+            rstring += chr(inside_code)
+    return rstring
+
+
 def convert_code(to_code: str, from_code=None):
+    '''
+    把input文件夹内的所有文件编码转换到指定编码
+    '''
     file_all = os.listdir('input')
     for f in file_all:
         _data = open_file_b(f'input/{f}')
@@ -1412,7 +1431,7 @@ class YU_RIS():
                     _offset = from_bytes(data[ptr+4:ptr+8])+data_offset
                     if _offset < len(data) and data[_offset] == 0x4d:
                         try:
-                            _str = data[_offset+4:_offset+_length-1].decode('cp932', errors='ignore')
+                            _str = data[_offset+4:_offset+_length-1].decode('cp932')
                             if _has_jp(_str):
                                 method.append(_str)
                         except Exception as e:
@@ -1613,7 +1632,7 @@ class YU_RIS():
                 _offset = from_bytes(data[ptr+4:ptr+8])+data_offset
                 if _offset < len(data) and data[_offset] == 0x4d:
                     try:
-                        _str = data[_offset+4:_offset+_length-1].decode('cp932', errors='ignore')
+                        _str = data[_offset+4:_offset+_length-1].decode('cp932')
                         if _has_jp(_str):
                             if _str in jp_chs and jp_chs[_str]:
                                 _t = jp_chs[_str].encode('gbk', errors='ignore')
@@ -2659,9 +2678,25 @@ class ANIM():
 
 class Lilim():
     '''
-    createfontindirect 0x80 -> 0x86
-    textouta           cmp al, 0xa0 -> cmp al,0xfe
-    文字检查模块        0x9f -> 0xfe
+    让exe基址固定
+    createfontindirect 0x80 -> 0x86 三处最后一处决定文本
+    textouta前           cmp al, 0xa0 -> cmp al,0xfe
+    8179->A1BE
+    817A->A1BF
+    55 8B EC 83 EC 64 修改        cmp al, 0xa0 -> cmp al,0xfe
+
+    ## 搜索特征AOS2
+    1. 函数
+        1. log函数 83 E4 F8 81 EC BC 010 00
+        2. 选择支HOOK点 53 56 57 68 00 00 04 00 E8
+    2. 边界
+        1. 选择支边界检查 55 8B EC 83 EC 64
+        2. 文字边界检查 8A 03 57 33 FF 3C 81
+    3. 全局变量
+        1. 文本 下面第二个 FF D5 68 00 00 01 00 6A 08 50 FF D6
+        2. 人名 下面  53 53 53 53 53 53 B9 02 00 00 00 E8
+        3. 选择支 上面 83 C4 08 33 C9 39 37 74
+    4. 字符集 88 5E 57 2B D0 8D 64 24 
     '''
     class BitStream:
         def __init__(self, data: bytes):
@@ -2857,7 +2892,7 @@ class Lilim():
             else:
                 return self.m_input.get_bits(8)
 
-    def extract():
+    def extract_for_vnr():
         def get_scenario_from_origin(data: list) -> list:
             text_all = []
             buff = ''
@@ -2879,6 +2914,80 @@ class Lilim():
 
             return text_all
         extract_jp(get_scenario_from_origin, 'cp932')
+
+    def output_hook_dict(dict_name='test'):
+        jp_chs = open_json('intermediate_file/jp_chs.json')
+        ans = bytearray()
+        cnt = 0
+        for key in jp_chs:
+            cnt += 1
+            # if cnt == 1000:
+            #     break
+            ans += key.encode('cp932') + b'\x00'
+            ans += jp_chs[key].encode('gbk', errors='ignore') + b'\x00'
+
+        save_file_b(dict_name, ans+b'\xFF')
+
+    def extract_for_hook_aos2():
+        def get_scenario_from_origin(data: list) -> list:
+            text_all = []
+            buff = ''
+            cnt = 0
+            # START FIXME
+            for line in data:
+                line = line[:-1]
+                if not line and buff:
+                    text_all.append(buff+'\\f\n')
+                    buff = ''
+                elif line:
+                    if line[0] not in '#:^%\t$ｔ' and not ('a' <= line[0] <= 'z'):
+                        if buff and buff[-1] != ']':
+                            buff += '\\n'
+
+                        buff += line
+                    elif line.count('slctwnd'):
+                        text_all.append(line.split('\"')[-2]+'\n')
+                cnt += 1
+            # END
+
+            return text_all
+        extract_jp(get_scenario_from_origin, 'cp932')
+
+    def fix_dixt():
+        '''
+        文本中不能出现半角的字母和\\f|\\n|[|]以外的符号
+        删除(~|\(|\))
+        替换 
+        [a-z]->全角
+        [0-9]->全角
+        [A-A]->全角
+        '''
+        cnt = 0
+        jp_chs = open_json('intermediate_file/jp_chs.json')
+        for key in jp_chs:
+            value = jp_chs[key]
+            value = value.replace('\\n', '※')
+            value = value.replace('\\f', '☆')
+            value = strB2Q(value, exclude=('[]\\'))
+            value = value.replace('☆', '\\f')
+            value = value.replace('※', '\\n')
+            if value != jp_chs[key]:
+                jp_chs[key] = value
+                cnt+=1
+        print('修复：', cnt)
+        save_json('intermediate_file/jp_chs.json', jp_chs)
+        # for key in jp_chs:
+        #     value = jp_chs[key]
+        #     value = value.replace('\\n','')
+        #     value = value.replace('\\f','')
+        #     value = value.replace('[','')
+        #     value = value.replace(']','')
+        #     for i in value:
+        #         if '\u0000'<i<'\u007f':
+        #             print(i, key, value)
+        #             cnt += 1
+        #             break
+        # print(cnt)
 
     def output():
         def has_jp(line: str) -> bool:

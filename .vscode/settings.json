@@ -3,7 +3,8 @@
     "files.associations": {
         "*.html": "html",
         "vector": "cpp",
-        "iosfwd": "cpp"
+        "iosfwd": "cpp",
+        "xstring": "cpp"
     },
     "python.linting.flake8Enabled": true,
     "python.linting.enabled": true

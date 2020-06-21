@@ -16,9 +16,61 @@
 所有的中文都只拿了第一个字节
 在复制完字符串后，还会对已经字符串继续处理
 
-## 即指
-x32dbg EC1000
-IDA    401000
+4BFBE0 记录文字地址
+4bfee0 记录人名
+sub_4541F0 
+0. 2
+1. sub_408600 应该是主循环
+   1. sub_4356D0
+      1. sub_4541F0 4568BE对上述地址写入文本，似乎是指令解释函数
+         1. sub_453E80 hook后导致log不显示,现在几乎可以确定是这个函数负责记录log
+            1. sub_458200
+         2. sub_45C3F0
+         3. sub_466b4a
+   2. sub_435CD0
+   3. #40875C sub_440D50() 这里会忽略人名，只输出对话，并将文字显示到画面上
+      1. sub_442F20@<eax>(signed __int16 *a1@<eax>, unsigned __int8 *text@<edi>)
+      2. sub_435180@<eax>(unsigned __int8 *text@<eax>, int a2@<ecx>, int a3, int a4)
+      3. sub_410050@<eax>(int *a1@<edi>, int uchar, void *a3, int a4)
+   4. sub_401EE0
+
+
+## 选择支
+[*(*4BFA84+4)+0x120]
+1. 0
+2. sub_42B0E0 int __thiscall sub_42B0E0(_DWORD *this)
+3. sub_42B340 int __fastcall sub_42B340(int *a1, int a2)
+4. sub_42CDE0 int __thiscall sub_42CDE0(_DWORD *this)
+5. sub_42E0E0 int __usercall sub_42E0E0@<eax>(_DWORD *a1@<esi>)
+6. sub_42E480 int __usercall sub_42E480@<eax>(_DWORD *a1@<eax>)
+7. sub_42E950 int __usercall sub_42E950@<eax>(_DWORD *a1@<eax>)
+8. sub_42F180 signed int __stdcall sub_42F180(_DWORD *a1)
+9. sub_45DB00 signed int __cdecl sub_45DB00(int a1, int a2)
+10. sub_4101E0 int __userpurge sub_4101E0@<eax>(void *text@<ecx>, int result@<eax>, int a3, int a4, int a5, int a6)
+11. sub_410050
+12. sub_40FDA0
+13. sub_40F5A0
+14. textouta
+
+## 搜索特征AOS2
+1. 函数
+   1. log函数 83 C4 08 83 FF 02
+   2. 选择支HOOK点 53 56 57 68 00 00 04 00 E8
+2. 边界
+   1. 选择支边界检查 55 8B EC 83 EC 64
+   2. 文字边界检查 8A 03 57 33 FF 3C 81
+3. 全局变量
+   1. 文本 下面第二个 FF D5 68 00 00 01 00 6A 08 50 FF D6
+   2. 人名 下面  53 53 53 53 53 53 B9 02 00 00 00 E8
+   3. 选择支 上面 83 C4 08 33 C9 39 37 74
+4. 字符集 88 5E 57 2B D0 8D 64 24 
+5. 环境检测 85 C0 74 1E E8
+
+
+## TODO
+1. 注入DLL
+2. 修改exe的具体方法
+3. 使用配置文件加载hook地址
 
 
 # .gsc:
