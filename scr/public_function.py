@@ -2,12 +2,14 @@
 import os
 import re
 import json
-from Crypto.Cipher import AES  
 import chardet
 import sqlite3
 import random
-from pdb import set_trace as int3
+import scr.langconv as lc
+import matplotlib.pyplot as plt
+from Crypto.Cipher import AES  
 from struct import unpack, pack
+from pdb import set_trace as int3
 from scr.baidufanyi import translate as baidu_t
 from scr.tencentfanyi import translate as tencent_t
 
@@ -30,8 +32,8 @@ def strB2Q(ustring, exclude=()):
         inside_code=ord(uchar)
         if inside_code == 32:                                 #半角空格直接转化                  
             inside_code = 12288
-        elif inside_code >= 32 and inside_code <= 126:        #半角字符（除空格）根据关系转化
-            inside_code += 65248
+        elif inside_code >= 0x20 and inside_code <= 0x7E:        #半角字符（除空格）根据关系转化
+            inside_code += 0xFEE0
         if uchar in exclude:
             rstring += uchar
         else:
@@ -54,50 +56,6 @@ def convert_code(to_code: str, from_code=None):
         _data = _data.decode(_code)
         _data = _data.encode(to_code)
         save_file_b(f'input/{f}', _data)
-
-
-def get_scenario_from_TyranoBuilder(data: list) -> list:
-    '''
-    TyranoBuilder通用方法
-    '''
-    jp = []
-    for line_t in data:
-        if line_t[0] == '[' or not line_t[:-4]:
-            continue
-        if line_t[-4:-1] in ('[p]', '[r]'):
-            jp.append(line_t)
-    return jp
-
-
-def output_translated_scenrio_tyranobuilder(encoding='utf8'):
-    '''
-    输出翻译后的文件 tyranobuilder 专用
-    '''
-    with open('intermediate_file/jp_chs.json', 'r', encoding=encoding) as f:
-        jp_chs = json.loads(f.read())
-
-    file_origial = os.listdir('input')
-    failed_text = []
-
-    for file_name in file_origial:
-        with open('input/'+file_name, 'r', encoding=encoding) as f:
-            data = f.readlines()
-        cnt = 0
-        for line in data:
-            key = line[:-4]
-            suffix = line[-4:-1]
-            if suffix in ('[p]', '[r]'):
-                if key not in jp_chs:
-                    failed_text.append(line)
-                elif line[0] == '「':
-                    data[cnt] = '「' + jp_chs[key][1:-1] + '」'+line[-4:]
-                else:
-                    data[cnt] = jp_chs[key] + line[-4:]
-            cnt += 1
-
-        with open('output/'+file_name, 'w', encoding=encoding) as f:
-            for line in data:
-                f.write(line)
 
 
 def get_scenario_from_origin_sakura(data: list):
@@ -621,6 +579,112 @@ def delete_zero(name: bytes, encoding='utf8'):
         name = name[:-1]
     return name.decode(encoding)
 
+
+class FONT():
+    def display_fnt(path='0xB9E2.fnt'):
+        data = pf.open_file_b(path)
+        height = 0x2A
+        width = 0x20
+
+        # plt.plot(width, height)
+        plt.figure(figsize=(3,4))
+        plt.xlim(0, width)
+        plt.ylim(0, height)
+        for i in range(height):
+            for j in range(width):
+                pix = data[(i*width+j)*4:(i*width+j)*4+4]
+                color = '#'+''.join(map(lambda x:hex(x)[2:] + ('0' if len(hex(x)) == 3 else ''), pix[:3]))
+                # print(color)
+                # color = '#000000'
+                plt.scatter(j, 0x2A-i, s=1, c=color, marker='o', alpha=pix[-1]/255)
+
+        plt.show()
+
+    def display_HZK24(uchar:str):
+        HZK24 = pf.open_file_b('data/HZK24H')
+        height, width = 0x2A, 0x20
+        plt.figure(figsize=(3,4))
+        plt.xlim(0, width)
+        plt.ylim(0, height)
+
+        need_size = int(24*24/8)
+        char_gb2312 = uchar.encode('gbk')
+        offset = (94 * (char_gb2312[0]-1-0xa0) + (char_gb2312[1]-1-0xa0)) * need_size
+        buff = HZK24[offset:offset+need_size]
+        # print(buff)
+        pix_buf = []
+        for i in buff:
+            pix_buf.append(bin(i)[2:].zfill(8))
+        pix_buf = ''.join(pix_buf)
+        # print(pix_buf)
+        for i in range(24):
+            for j in range(24):
+                if pix_buf[i*24+j] == '1':
+                    plt.scatter(j+1, height-i-7, s=1, c='#000000', marker='o')
+
+    def create_bitmap():
+        def create_bitmap_uchar(uchar):
+            height, width = 0x2A, 0x20
+            need_size = int(24*24/8)
+            char_gb2312 = uchar.encode('gb2312')
+            offset = (94 * (char_gb2312[0]-1-0xa0) + (char_gb2312[1]-1-0xa0)) * need_size
+            buff = HZK24[offset:offset+need_size]
+            pix_buf = []
+            for i in buff:
+                pix_buf.append(bin(i)[2:].zfill(8))
+            pix_buf = ''.join(pix_buf)
+            ans = [b'\x00\x00\x00\x00']*0x540
+            for i in range(24):
+                for j in range(24):
+                    if pix_buf[i*24+j] == '1':
+                        ans[(i+7)*0x20+j+1] = b'\xff\xff\xff\xff'
+                        # plt.scatter(j+1, height-i-7, s=1, c='#000000', marker='o')
+            ans = b''.join(ans)
+            # pf.save_file_b(uchar, ans)
+            return ans
+        ans = bytearray(pf.open_file_b('_FONTSET.MED'))
+        top = b'\xF7\xFE'
+        top = 0x80 + 0xC0 * 0xA80 + (top[1] - 0x40 + 0x5E * (top[0]-0xA0) ) * 0x1500 + 0x1500
+        if top > len(ans):
+            ans += b'\x00'*(top - len(ans))
+        for i in range(0xA1, 0xF8):
+            if 0xA9<i<0xB0 or i in (0xA2,):
+                continue
+            for j in range(0xA1, 0xFF):
+                uchar = pf.to_bytes(i,1) + pf.to_bytes(j, 1)
+                try:
+                    pos = 0x80 + 0xC0 * 0xA80 + (uchar[1] - 0x40 + 0x5E * (uchar[0]-0xA0) ) * 0x1500
+                    temp = create_bitmap_uchar(uchar.decode('gb2312'))
+                    ans[pos:pos+0x1500] = temp
+                except Exception as e:
+                    print(e)
+                    print(uchar)
+        pf.save_file_b('fontset', ans)
+
+    def display_fontset(uchar:str):
+        height, width = 0x2A, 0x20
+        plt.figure(figsize=(3,4))
+        plt.xlim(0, width)
+        plt.ylim(0, height)
+
+        need_size = 0x1500
+
+        uchar = uchar.encode('gbk')
+        offset = 0x80 + 0xC0 * 0xA80 + (uchar[1] - 0x40 + 0x5E * (uchar[0]-0xA0) ) * 0x1500
+        buff = fontset[offset:offset+need_size]
+
+        for i in range(height):
+            for j in range(width):
+                pix = buff[(i*width+j)*4:(i*width+j)*4+4]
+                color = '#000000'
+                plt.scatter(j, 0x2A-i, s=1, c=color, marker='o', alpha=pix[-1]/255)
+
+    def show_offset(uchar, base=0):
+        uchar = uchar.encode('gb2312')
+        a = 0xC0 * 0xA80 + (uchar[1] - 0x40 + 0x5E * (uchar[0]-0xA0))*0x1500 + base
+        b = 0x80+0xC0 * 0xA80 + (uchar[1] - 0x40 + 0x5E * (uchar[0]-0xA0))*0x1500
+        print('Memory:', hex(a))
+        print('FONTSET:', hex(b))
 
 
 class LzssCompressor():
@@ -2057,7 +2121,7 @@ class SILKY():
         if not os.path.exists('silky_text'):
             os.mkdir('silky_text')
         for f in file_all:
-            os.system(f'mestool.exe p input/{f} silky_text/{f}')
+            os.system(f'bin\\mestool.exe p input/{f} silky_text/{f}')
         
         file_all = os.listdir('silky_text')
         ans = []
@@ -2086,7 +2150,7 @@ class SILKY():
         print(f'替换：{cnt}\n失败：{len(failed)}')
         file_all = os.listdir('silky_chs')
         for f in file_all:
-            os.system(f'exe\\mestool.exe c input/{f} silky_chs/{f} output/{f}')
+            os.system(f'bin\\mestool.exe c input/{f} silky_chs/{f} output/{f}')
 
     def cut_MES(path: str):
         '''
@@ -2106,6 +2170,9 @@ class SILKY():
         save_file_b(f'temp/{count-1}', data[data_p+offset[-1]:])
 
     def create_dict_sliky():
+        '''
+        VNR使用
+        '''
         jp_all = open_file('intermediate_file/jp_all.txt').splitlines()
         name = set()
         for i in jp_all:
@@ -2203,7 +2270,7 @@ class SNL():
         save_json('intermediate_file/jp_chs.json', jp_chs)
 
 
-class DXLib():
+class MED():
     '''
     _VIEW 前24字节完全一样
     name: [120224][ルネ Team Bitters] マリッジブルー[婚約者がいるのに、どうしてこんな男に……]
@@ -2224,25 +2291,13 @@ class DXLib():
     name: [170512]光翼戦姫エクスティアA
     key: b'\xd0\xcf\xcd\x9b\x88\x8d\x8c\x97\x9f\xbf\x94\x8b\x8d\x8c\x9b\x8e\x97\x8d\x9b'
 
+    CreateFontIndirectA  8D 45 BC 8B 55 FC 83 C2 1B   -0x6   B0 86 90
+                         70 23 00 00   
+    读取对话文字的点阵    00 00 00 89 55 F0 83 7D F0 40 0F 8C
+    读取人名、log、对话框点阵 89 55 F0 83 7D F0 40 7C   89 55 F8 89 45 FC 8D 45 E0 50
+
     '''
     key = b'\x9b\xd0\xcf\xd0\x9b\x88\x8d\x8c\x97\x9f\xd0\xcf\x94\x8b\x8d\x8c\x9b\x8e\x97\x8d'
-
-    def create_key_dx():
-        Key = b'\xAA'*12
-        Key = bytearray(Key)
-        Key[0] ^= 0xff
-        Key[1] = ((Key[1] >> 4) | (Key[1] << 4)) & 0xff
-        Key[2] = Key[2] ^ 0x8a
-        Key[3] = ((((Key[3] >> 4) | (Key[3] << 4))) ^ 0xff) & 0xff
-        Key[4] ^= 0xff
-        Key[5] = Key[5] ^ 0xac
-        Key[6] ^= 0xff
-        Key[7] = ((((Key[7] >> 3) | (Key[7] << 5))) ^ 0xff) & 0xff
-        Key[8] = ((Key[8] >> 5) | (Key[8] << 3)) & 0xff
-        Key[9] = Key[9] ^ 0x7f
-        Key[10] = (((Key[10] >> 4) | (Key[10] << 4)) ^ 0xd6) & 0xff
-        Key[11] = Key[11] ^ 0xcc
-        return Key
 
     def show_key(data:bytes):
         data = bytearray(data)
@@ -2257,11 +2312,11 @@ class DXLib():
 
         '''
         if _key:
-            DXLib.key = _key
+            MED.key = _key
         _data = bytearray(_data)
 
         for i in range(0x10, len(_data)):
-            _data[i] = (_data[i]-DXLib.key[(i-0x10) % len(DXLib.key)]) & 0xff
+            _data[i] = (_data[i]-MED.key[(i-0x10) % len(MED.key)]) & 0xff
 
         return _data
 
@@ -2269,12 +2324,14 @@ class DXLib():
         _data = bytearray(_data)
 
         for i in range(0x10, len(_data)):
-            _data[i] = (_data[i]+DXLib.key[(i-0x10) % len(DXLib.key)]) & 0xff
+            _data[i] = (_data[i]+MED.key[(i-0x10) % len(MED.key)]) & 0xff
 
         return _data
 
     def extract_med(name=None):
         '''
+        从input文件夹内的脚本文件抽取文本，放入intermediate_file/jp_all.txt
+        如果游戏可以自定义姓名，则需要将文本中的＄０进行替换，使用时只需要传入主人公的名字就可以了
         ＄０ 主人公名字
         '''
         def _has_jp(line: str) -> bool:
@@ -2282,7 +2339,7 @@ class DXLib():
             如果含有日文文字（除日文标点）则认为传入文字含有日文, 返回true
             '''
             for ch in line:
-                if (ch >= '\u0800' and ch < '\u9fa5') or ('\u4e00' <= ch and ch <= '\u9fa5'):
+                if ('\u0800' <= ch and ch <= '\u9fa5') or ('\uff01'<=ch<='\uff5e'):
                     return True
             return False
 
@@ -2290,7 +2347,7 @@ class DXLib():
         ans = []
         for f in file_all:
             _data = open_file_b(f'input/{f}')
-            _data = DXLib.decrypt(_data)
+            # _data = MED.decrypt(_data)
             _offset = int.from_bytes(_data[4:8], byteorder='little') + 0x10
             _str = _data[_offset:]
             _buff = b''
@@ -2300,39 +2357,142 @@ class DXLib():
                 else:
                     try:
                         _buff = _buff.decode('cp932')
-                        if _has_jp(_buff) and _buff[0] not in ';':
+                        if _has_jp(_buff) and _buff[0] not in ';#':
                             if name:
                                 _buff = _buff.replace('＄０', name)
                             ans.append(_buff)
-                        # ans.append(_buff)
                     except Exception as e:
                         print(e)
                         print(f, _buff)
                     _buff = b''
         save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
 
-    def decode_mes():
+    def fix_dict():
+        '''
+        只支持gb2312编码，所以要把所有的繁体都转为简体
+        不要出现半角符号
+        '''
+        table = {
+        "増":"增",
+        "発":"发",
+        "▁":"_",
+        "様":"样",
+        '変': '变', 
+        '駄': '驭', 
+        '関': '关', 
+        '対': '对', 
+        '単': '单', 
+        '増': '增', 
+        '弾': '弹', 
+        '効': '效', 
+        '実': '实', 
+        '晩': '晚', 
+        '楽': '乐', 
+        '験': '验', 
+        '悪': '恶', 
+        '戦': '战', 
+        '駅': '驿', 
+        '姫': '姬', 
+        '険': '险', 
+        '栄': '容', 
+        '円': '圆', 
+        '気': '气', 
+        '巣': '巢', 
+        '発': '发', 
+        '拠': '处', 
+        '撃': '击', 
+        '圧': '压', 
+        '応': '应', 
+        '沢': '尺', 
+        '姉': '姐', 
+        '臓': '脏', 
+        '薬': '药', 
+        '覚': '觉', 
+        '闘': '斗'
+        }
+        jp_chs = open_json('intermediate_file/jp_chs.json')
+        cnt = 0
+        failed = {}
+        for key in jp_chs:
+            value = jp_chs[key]
+            value = strB2Q(value)
+            value = lc.Converter('zh-hans').convert(value)
+            for ch in table:
+                value = value.replace(ch,table[ch])
+            try:
+                for ch in value:
+                    ch.encode('gb2312')
+            except Exception as e:
+                failed[ch]=""
+            
+            jp_chs[key] = value
+        save_json('intermediate_file/jp_chs.json', jp_chs)
+        print('无法编码：', len(failed), failed)
+
+    def output(name=None):
+        '''
+        替换原文件中的文本，将替换后的结果放入output文件夹
+        使用前需要利用jp_all.txt生成翻译字典，并将字典翻译放入intermediate_file文件夹，字典的格式为
+        {
+            'Japanese':'chinese',
+            'Japanese':'chinese',
+            ...
+        }
+        '''
+        def _has_jp(line: str) -> bool:
+            '''
+            如果含有日文文字（除日文标点）则认为传入文字含有日文, 返回true
+            '''
+            for ch in line:
+                if ('\u0800' <= ch and ch <= '\u9fa5') or ('\uff01'<=ch<='\uff5e'):
+                    return True
+            return False
+
         file_all = os.listdir('input')
+        jp_chs = open_json('intermediate_file/jp_chs.json')
+        cnt = 0
+        failed = []
         for f in file_all:
             _data = open_file_b(f'input/{f}')
-            _data = DXLib.decrypt(_data)
+            _data = bytearray(_data)
+            _offset = int.from_bytes(_data[4:8], byteorder='little') + 0x10
+            _str = _data[_offset:]
+            _buff = b''
+            while _offset < len(_data):
+                if _data[_offset]:
+                    _buff += _data[_offset:_offset+1]
+                else:
+                    try:
+                        _str = _buff.decode('cp932')
+                        # print(_str)
+                        # if len(failed) >5:
+                        #     return
+                        if not _has_jp(_str) or _str[0] in ';#':
+                            _offset += 1
+                            continue
+                        if name:
+                            _str = _str.replace('＄０', name)
+                        if _str in jp_chs and jp_chs[_str]:
+                            _offset -= len(_buff)
+                            _new_bytes = jp_chs[_str].encode('gb2312', errors='ignore')
+                            _data[_offset:_offset+len(_buff)] = _new_bytes
+                            _offset += len(_new_bytes)
+                            cnt += 1
+                        else:
+                            failed.append(_str)
+                    except Exception as e:
+                        print('失败')
+                        print(f, _buff)
+                        print(e)
+                        print()
+                    finally:
+                        _buff = b''
+                _offset += 1
+            _data[:4] = to_bytes(len(_data)-0x10, 4)
             save_file_b(f'output/{f}', _data)
-
-    def create_key(raw: bytes):
-        base = 0x2d
-        ans = ''
-        for i in raw:
-            ans += ('\\x'+hex(i-base)[2:])
-        print(ans)
-
-    def create_key_2():
-        a = b'\x00\x23\x52\x55\x4C\x45\x5F\x56\x49\x45\x57\x45\x52\x00\x3A\x56\x49\x45\x57\x5F\x30\x00\x7B\x00'
-        b = b'\xD0\xF2\x1F\xF0\xD4\xD2\xEB\xED\xE8\x04\xEB\xD0\xDF\x8C\xD5\xE4\xE0\xD2\xF2\x2F\xFF\xCD\x16\x88'
-        base = 0x2d
-        ans = ''
-        for i in range(len(a)):
-            ans += ('\\x'+hex((b[i]-a[i]) & 0xff)[2:])
-        print(ans)
+        save_file('intermediate_file/failed.txt', '\n'.join(failed))
+        print('替换:', cnt)
+        print('失败:', len(failed))
 
     def unpack(path='md_scr.med', output='input'):
         def remove_dumplicate_str(key):
@@ -2388,14 +2548,19 @@ class DXLib():
             print(key, len(key))
             for f in file_all:
                 _data = open_file_b(f'{output}/{f}')
-                _data = DXLib.decrypt(_data, key)
+                _data = MED.decrypt(_data, key)
                 save_file_b(f'{output}/{f}', _data)
-            save_json(f'{output}/name_list.json', name_list)
+            if not os.path.exists('intermediate_file'):
+                os.mkdir('intermediate_file')
+            save_json(f'intermediate_file/name_list.json', name_list)
         else:
             print('无法解密')
 
-    def repack(path='input'):
-        name_list = open_json(f'{path}/name_list.json')
+    def repack(path='output'):
+        '''
+        调用此函数先需要先将解包时产生的密钥填入key属性
+        '''
+        name_list = open_json(f'intermediate_file/name_list.json')
         # name_list = os.listdir(path)
         entry_length = 0x17
         header = b'MDE0\x17\x00'
@@ -2414,7 +2579,7 @@ class DXLib():
             unk = int(f[_p+1:])
             unk = to_bytes(unk, 4)
             _file_data = open_file_b(f'{path}/{f}')
-            _file_data = DXLib.encrypt(_file_data)
+            _file_data = MED.encrypt(_file_data)
             entry = name + unk + to_bytes(len(_file_data), 4) + to_bytes(offset, 4)
             entry_all.append(entry)
             file_data.append(_file_data)
@@ -2920,13 +3085,14 @@ class Lilim():
         ans = bytearray()
         cnt = 0
         for key in jp_chs:
-            cnt += 1
             # if cnt == 1000:
             #     break
-            ans += key.encode('cp932') + b'\x00'
-            ans += jp_chs[key].encode('gbk', errors='ignore') + b'\x00'
-
-        save_file_b(dict_name, ans+b'\xFF')
+            if jp_chs[key]:
+                ans += key.encode('cp932') + b'\x00'
+                ans += jp_chs[key].encode('gbk', errors='ignore') + b'\x00'
+                cnt += 1
+        print('添加条目: ', cnt)
+        save_file_b("output/"+dict_name, ans+b'\xFF')
 
     def extract_for_hook_aos2():
         def get_scenario_from_origin(data: list) -> list:
