@@ -5,13 +5,16 @@ if __name__ == "__main__":
     # print(SNL._split_line('えっ！？いや、そんなつもりは‥‥ないけど。'))
     # SNL.create_dict()
 
+    # MED.unpack()
     # MED.extract_med()
+    MED.show_key(b'\xd0\xcf\xcd\x9b\x88\x8d\x8c\x97\x9f\xbf\x94\x8b\x8d\x8c\x9b\x8e\x97\x8d\x9b')
     # MED.fix_dict()
     # MED.output()
     # MED.repack()
+    # MED.fix_exe('EXSTIA1.EXE')
 
     # ANIM.extract()
-    ANIM.output()
+    # ANIM.output()
 
     # Lilim.extract_for_hook_aos2()
     # Lilim.fix_dixt()
@@ -34,5 +37,6 @@ if __name__ == "__main__":
     # YU_RIS.extract_ybn()
     # YU_RIS.output_ybn(encrypt=1)
 
+ 
 
     pass

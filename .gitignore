@@ -15,3 +15,5 @@ __pycache__
 test.cpp
 test.exe
 font
+*.EXE
+*.med
