@@ -1,11 +1,12 @@
 {
-    "python.pythonPath": "C:\\Users\\82406\\Anaconda3\\python.exe",
+    "python.pythonPath": "C:\\Users\\ssynn\\Anaconda3\\python.exe",
     "files.associations": {
         "*.html": "html",
         "vector": "cpp",
         "iosfwd": "cpp",
-        "xstring": "cpp"
+        "xstring": "cpp",
+        "istream": "cpp"
     },
     "python.linting.flake8Enabled": true,
-    "python.linting.enabled": true
+    "python.linting.enabled": false
 }

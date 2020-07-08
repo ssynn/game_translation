@@ -181,7 +181,7 @@ void parse_script(const vector<u8> &script, ofstream &out_txt)
 			{
 				u8 last_opcode = script[index - 2];
 				text = get_raw_text(script, index);
-				if (last_opcode == 0x0E)
+				if (last_opcode == 0x0E | last_opcode == 0xFD) // 人名有可能是0xFD
 				{
 					out_txt << text << endl;
 				}
@@ -239,7 +239,7 @@ void create_script(const vector<u8> &in_script, ifstream &in_txt, vector<u8> &ou
 				
 				string jpn_text = get_raw_text(in_script, index);
 				// 0E 33 + text
-				if (last_opcode == 0x0E)
+				if (last_opcode == 0x0E | last_opcode == 0xFD)
 				{
 					string chs_text;
 					getline(in_txt, chs_text);
@@ -369,7 +369,7 @@ int main(int argc, char *argv[])
 	in_mes.read((char*)&entry_size, sizeof(entry_size));
 	in_mes.read((char*)&choice_num, sizeof(choice_num));
 	vector<u32> in_choice_offset_table;
-	in_mes.seekg(entry_size * 4, ios_base::cur);
+	in_mes.seekg(entry_size * 4, ios_base::cur);//跳过entry表
 	u32 choice_offset;
 	for (u32 i = 0; i < choice_num; ++i)
 	{
@@ -377,15 +377,15 @@ int main(int argc, char *argv[])
 		in_choice_offset_table.push_back(choice_offset);
 	}
 
-	u32 in_script_size = in_mes_file_size - in_mes.tellg();
+	u32 in_script_size = in_mes_file_size - in_mes.tellg();//文件大小减去当前指针就是文本区域的大小
 	u8 *in_script_buf = new u8[in_script_size];
-	in_mes.read((char*)in_script_buf, in_script_size);
-	vector<u8> in_script(in_script_buf, in_script_buf + in_script_size);
+	in_mes.read((char*)in_script_buf, in_script_size); //读入文本缓冲
+	vector<u8> in_script(in_script_buf, in_script_buf + in_script_size);//用vector存储文本缓冲
 	delete[] in_script_buf;
 	// parse mode
 	if (argv[1][0] == 'p')
 	{
-		ofstream out_txt(argv[3], ios::binary);
+		ofstream out_txt(argv[3], ios::binary);//输出
 		parse_script(in_script, out_txt);
 		out_txt.close();
 	}

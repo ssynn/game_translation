@@ -1,5 +1,5 @@
 from scr.public_function import *
-import scr.lmdis as lm
+# import scr.lmdis as lm
 
 if __name__ == "__main__":
     # print(SNL._split_line('えっ！？いや、そんなつもりは‥‥ないけど。'))
@@ -7,11 +7,10 @@ if __name__ == "__main__":
 
     # MED.unpack()
     # MED.extract_med()
-    MED.show_key(b'\xd0\xcf\xcd\x9b\x88\x8d\x8c\x97\x9f\xbf\x94\x8b\x8d\x8c\x9b\x8e\x97\x8d\x9b')
-    # MED.fix_dict()
-    # MED.output()
-    # MED.repack()
-    # MED.fix_exe('EXSTIA1.EXE')
+    MED.fix_dict()
+    MED.output()
+    MED.repack('output')
+    MED.fix_exe('EXSTIA2.EXE')
 
     # ANIM.extract()
     # ANIM.output()
@@ -36,7 +35,5 @@ if __name__ == "__main__":
 
     # YU_RIS.extract_ybn()
     # YU_RIS.output_ybn(encrypt=1)
-
- 
 
     pass
