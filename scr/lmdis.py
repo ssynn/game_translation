@@ -812,7 +812,7 @@ class Disassembler:
 
             expected_command_count = self.read_int()
             command_count = 0
-            str = ""
+            _str = ""
             found_str = False
             extra_data = None
             while command_count < expected_command_count: #and self.idx < block_end:
@@ -820,10 +820,10 @@ class Disassembler:
                 op = self.read_byte()
                 command_count += 1
 
-                if op != 0x01 and str != "":
-                    data.append(EventArgument(ArgumentType.char_string, str, extra_data))
+                if op != 0x01 and _str != "":
+                    data.append(EventArgument(ArgumentType.char_string, _str, extra_data))
                     event_block.commands.append(EventCommand(-1, data))
-                    str = ""
+                    _str = ""
                     found_str = False
                     data = []
 
@@ -843,7 +843,7 @@ class Disassembler:
 
                     s = self.read_string()
                     extra_data = self.read_int()
-                    str += shift_jis2unicode(self.read_word())
+                    _str += shift_jis2unicode(self.read_word())
                     i = self.read_int()
                     found_str = True
                     
@@ -913,7 +913,7 @@ class Disassembler:
                     event_block.commands.append(EventCommand(op, data))
 
             if found_str:
-                data = [EventArgument(ArgumentType.char_string, str)]
+                data = [EventArgument(ArgumentType.char_string, _str)]
                 event_block.commands.append(EventCommand(-1, data))
 
             return event_block

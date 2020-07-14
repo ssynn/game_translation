@@ -1235,6 +1235,195 @@ class LIVEMAKER():
             ans[line] = ''
         save_json('intermediate_file/jp_chs.json', ans)
 
+    def _text_from_cmds(cmds, version) -> str:
+        # print(cmds)
+        _buff = b''
+        
+        for cmd in cmds:
+            _pos = 1
+            if cmd[0] == 0x3:
+                break
+            _pos += 4 if version >= 104 else 0
+            if version < 105:
+                _pos += from_bytes(cmd[_pos:_pos+4]) + 4
+            _pos += 4 if version >= 105 else 0
+            _pos += 4
+            _t = cmd[_pos:_pos+2]
+            _t.reverse()
+            if _t[0] == 0:
+                _t = _t[1:]
+            _buff += _t
+            _pos += 6
+        cmd = cmds[-1]
+
+        return _buff.decode('cp932') + ('<PG>' if cmd[-1] else '<BR>')
+
+    def extract():
+        file_all = os.listdir('input')
+        ans = []
+        for f in file_all:
+            print(f)
+            data = open_file_b(f'input/{f}')
+            data = bytearray(data)
+            _p = 0
+            while _p < len(data):
+                if data[_p:_p+1] == b'T' and data[_p:_p+6] == b'TpWord':
+                    
+                    _length_TpWord = from_bytes(data[_p-4:_p])
+                    _start_TpWord = _p
+                    _TpWord = data[_p:_p+_length_TpWord]
+                    _buff = b''
+                    _version = int(_TpWord[6:9].decode())
+                    if _version < 102:
+                        raise Exception(f'version can not be lower than 102!')
+                    _pos = 9
+
+                    # 跳过decorators
+                    _decorator_num = from_bytes(_TpWord[_pos:_pos+4])
+                    _pos += 4
+                    for _ in range(_decorator_num):
+                        _pos += 0x4*4+2
+                        _pos += 1 if _version < 100 else 4
+                        _pos += from_bytes(_TpWord[_pos:_pos+4])
+                        _pos += 4
+                        _pos += from_bytes(_TpWord[_pos:_pos+4])
+                        _pos += 4
+                        _pos += 4 if _version >= 100 else 0
+                        _pos += 4 if _version >= 100 else 0
+
+                    # 跳过conditions
+                    if _version >= 104:
+                        _condition_num = from_bytes(_TpWord[_pos:_pos+4])
+                        _pos += 4
+                        for _ in range(_condition_num):
+                            _pos += 4
+                            _pos += from_bytes(_TpWord[_pos:_pos+4])
+                            _pos += 4
+
+                    # 跳过links
+                    if _version >= 105:
+                        _links_num = from_bytes(_TpWord[_pos:_pos+4])
+                        _pos += 4
+                        for _ in range(_links_num):
+                            _pos += 4
+                            _pos += from_bytes(_TpWord[_pos:_pos+4])
+                            _pos += 4
+                            _pos += from_bytes(_TpWord[_pos:_pos+4])
+                            _pos += 4
+
+                    # 抽取命令
+                    '''
+                    TWdChar = 0x01
+                    TWdOpeDiv = 0x02
+                    TWdOpeReturn = 0x03
+                    TWdOpeIndent = 0x04
+                    TWdOpeUndent = 0x05
+                    TWdOpeEvent = 0x06
+                    TWdOpeVar = 0x07
+                    TWdImg = 0x09
+                    TWdOpeHistChar = 0x0A
+                    '''
+                    _pos += 4
+                    _start = 0
+                    _cmds = []
+                    print(hex(_pos))
+                    while _pos < len(_TpWord):
+                        _opcode = _TpWord[_pos]
+                        _start = _pos
+                        # print(_opcode, hex(_pos))
+                        _pos += 1
+                        _pos += 4 if _version >= 104 else 0
+                        # 文本TWdChar
+                        if _opcode == 0x01:
+                            if _version < 105:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4]) + 4
+                            _pos += 4 if _version >= 105 else 0
+                            _pos += 4
+                            _pos += 6
+                        # TWdOpeDiv
+                        elif _opcode == 0x02:
+                            _pos += 1
+                            _pos += 9 if _version >= 105 else 0
+                        # TWdOpeReturn
+                        elif _opcode == 0x03:
+                            _pos += 1
+                        # TWdOpeIndent
+                        elif _opcode == 0x04:
+                            pass
+                        # TWdOpeUndent
+                        elif _opcode == 0x05:
+                            pass
+                        # TWdOpeEvent NAME
+                        elif _opcode == 0x06:
+                            _size = from_bytes(_TpWord[_pos:_pos+4])
+                            _pos += 4
+                            # _value = _TpWord[_pos:_pos+_size]
+                            _pos += _size
+                            # if _value[:9] == b'NAMELABEL':
+                            #     ans.append(_value)
+                        # TWdOpeVar
+                        elif _opcode == 0x07:
+                            _pos += 4
+                            _pos += 4 if _version >= 100 else 0
+                            if 100 <= _version < 105:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                            _pos += 4 if _version >= 105 else 0
+                            if 102 <= _version:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                        # TWdImg
+                        elif _opcode == 0x09:
+                            if _version < 105:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                            _pos += 4 if _version >= 105 else 0
+                            _pos += 4
+                            _size = from_bytes(_TpWord[_pos:_pos+4])
+                            _pos += 4
+                            _pos += 1
+                            if _version >= 103:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                            _pos += 16 if _version >= 105 else 0
+                            if _version >= 105:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                        # OpeData
+                        elif _opcode == 0x0A:
+                            _pos += 4
+                            _pos += 4 if _version >= 100 else 0
+                            if 100 <= _version < 105:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                            _pos += 4 if _version >= 105 else 0
+                            if 102 <= _version:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                        else:
+                            raise Exception(f'JMP ERROR! {hex(_opcode)} {hex(_p)} {hex(_pos)} {hex(_pos + _p)}')
+                        _cmds.append(_TpWord[_start: _pos])
+                    
+                    # 抽取文本
+                    _start = -1
+                    # print(_cmds)
+                    # if len(ans):
+                    #     return
+                    for idx, _cmd in enumerate(_cmds):
+                        if _cmd[0] == 0x1 and _start == -1:
+                            _start = idx
+                        if _cmd[0] == 0x3 and _start != -1:
+                            # print(_start, idx)
+                            _str = LIVEMAKER._text_from_cmds(_cmds[_start: idx+1], _version)
+                            # print(_str)
+                            ans.append(_str)
+                            _start = -1
+                    
+                    print(f, 'Tpword', hex(_p), len(_cmds))
+                    _p += _length_TpWord
+                _p += 1
+        save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
+
 
 class YU_RIS():
     '''
@@ -2043,10 +2232,7 @@ class NEKOSDK():
     createfontA push 0x80 
 
     如果文字的结尾有\t会导致程序崩溃
-
-    FIXME 
-    1、 选择只没有汉化
-    2、 会莫名其妙崩溃
+    选择只在flow.pak
     '''
     def extract_pak_txt():
         file_all = os.listdir('input')
@@ -2078,14 +2264,6 @@ class NEKOSDK():
         save_json('intermediate_file/jp_chs.json', jp_chs)
 
     def output():
-        def new_str(text: str):
-            if len(text) > 10:
-                _t = random.randint(-3, 5)
-                if _t > 0:
-                    text += '你'*_t
-                elif _t < 0:
-                    text = text[:_t]
-            return text
         file_all = os.listdir('input')
         failed = []
         cnt = 0
@@ -2122,7 +2300,6 @@ class NEKOSDK():
                     _str = data[p+4:p+3+_len2]
                     _str = _str.decode('cp932')
                     if _str in jp_chs and jp_chs[_str]:
-                        # _str = new_str(_str)
                         _str = jp_chs[_str]
                         _str = _str.encode('gbk', errors='ignore')
                         data[p:p+4] = to_bytes(len(_str)+1, 4)
@@ -2330,18 +2507,19 @@ class MED():
     让生成文字点阵的范围包含0xA000-0xE040的编码 75 07 C7 45 BC E0 00 00 00
 
     ＄０ 主人公名字
-    ^([fbps]|CH|[0-9]).+\n
+    ^([fbps]|CH|#|[0-9]).+\n
     '''
     # key = b'\xd0\xcd\xce\xc9\x9b\x88\x8d\x8c\x97\x9f\xcd\x94\x8b\x8d\x8c\x9b\x8e\x97\x8d\x9b'
-
-    def show_key(data: bytes):
-        data = bytearray(data)
-        print(' '.join(list(map(lambda x: hex(x)[2:], data))))
-        # for i in range(len(data)):
-        #     data[i] = 0xff & (-1*data[i])
-        print(data, data.decode('cp932'))
-        print(' '.join(list(map(lambda x: hex(x)[2:], data))))
-        return data.decode('cp932')
+    def create_talbe(target:str, chs:str):
+        '''
+        创建替换的行
+        '''
+        a = target
+        b = ('b\'\\x'+'\\x'.join(a.split())+'\'')
+        b = (eval(b))
+        c = b'\x00'+chs.encode('gbk')+b'\x00'*(len(b)-len(chs.encode('gbk'))-1)
+        ans = (b, 0, b,c, 1,chs)
+        print(ans)
 
     def decrypt(_data: bytes, _key=None):
         '''
@@ -2592,7 +2770,7 @@ class MED():
             print(bytearray(key))
             ans = {
                 'name_list': name_list,
-                'key': MED.show_key(key),
+                'key': key.decode('cp932'),
                 'entry_length': entry_length
             }
             print(key, len(key))
@@ -2694,37 +2872,55 @@ class MED():
             (b'\x75\x07\xC7\x45\xBC\xE0\x00\x00\x00',
              0x5, b'\xe0', b'\xa0', 1, '不跳过0xA0-0xE0'),
             (b'\x00\x83\x8D\x81\x5B\x83\x68\x00', 0, b'\x00\x83\x8D\x81\x5B\x83\x68\x00',
-             b'\x00\xd4\xd8\xc8\xeb\x00\x00\x00', 5, '载入'),
+             b'\x00\xd4\xd8\xc8\xeb\x00\x00\x00', -1, '载入'),
             (b'\x00\x83\x5A\x81\x5B\x83\x75\x00', 0, b'\x00\x83\x5A\x81\x5B\x83\x75\x00',
-             b'\x00\xb1\xa3\xb4\xe6\x00\x00\x00', 5, '保存'),
+             b'\x00\xb1\xa3\xb4\xe6\x00\x00\x00', -1, '保存'),
             (b'\x00\x90\xDD\x92\xE8\x00', 0, b'\x00\x90\xDD\x92\xE8\x00',
-             b'\x00\xc9\xe8\xb6\xa8\x00', 4, '设定'),
+             b'\x00\xc9\xe8\xb6\xa8\x00', -1, '设定'),
             (b'\x00\x8F\x49\x97\xB9\x00', 0, b'\x00\x8F\x49\x97\xB9\x00',
-             b'\x00\xbd\xe1\xca\xf8\x00', 8, '结束'),
+             b'\x00\xbd\xe1\xca\xf8\x00', -1, '结束'),
             (b'\x00\x83\x51\x81\x5B\x83\x80\x8F\x49\x97\xB9\x00', 0, b'\x00\x83\x51\x81\x5B\x83\x80\x8F\x49\x97\xB9\x00',
-             b'\x00\xd3\xce\xcf\xb7\xbd\xe1\xca\xf8\x00\x00\x00', 3, '游戏结束'),
+             b'\x00\xd3\xce\xcf\xb7\xbd\xe1\xca\xf8\x00\x00\x00', -1, '游戏结束'),
             (b'\x00\x89\xF1\x91\x7A\x8F\x49\x97\xB9\x00', 0, b'\x00\x89\xF1\x91\x7A\x8F\x49\x97\xB9\x00',
-             b'\x00\xbb\xd8\xcf\xeb\xbd\xe1\xca\xf8\x00', 6, '回想结束'),
+             b'\x00\xbb\xd8\xcf\xeb\xbd\xe1\xca\xf8\x00', -1, '回想结束'),
             (b'\x00\x83\x5E\x83\x43\x83\x67\x83\x8B\x82\xD6\x96\xDF\x82\xE9\x00', 0,
              b'\x00\x83\x5E\x83\x43\x83\x67\x83\x8B\x82\xD6\x96\xDF\x82\xE9\x00',
-             b'\x00\xb7\xb5\xbb\xd8\xb1\xea\xcc\xe2\x00\x00\x00\x00\x00\x00\x00', 3, '返回标题'),
+             b'\x00\xb7\xb5\xbb\xd8\xb1\xea\xcc\xe2\x00\x00\x00\x00\x00\x00\x00', -1, '返回标题'),
             (b'\x00\x8D\xC5\x91\xE5\x89\xBB\x00', 0, b'\x00\x8D\xC5\x91\xE5\x89\xBB\x00',
-             b'\x00\xd7\xee\xb4\xf3\xbb\xaf\x00', 4, '最大化'),
+             b'\x00\xd7\xee\xb4\xf3\xbb\xaf\x00', -1, '最大化'),
             (b'\x00\x83\x5E\x83\x43\x83\x67\x83\x8B\x82\xD6\x96\xDF\x82\xE8\x82\xDC\x82\xB7\x82\xA9\x81\x48\x00',
              0, b'\x00\x83\x5E\x83\x43\x83\x67\x83\x8B\x82\xD6\x96\xDF\x82\xE8\x82\xDC\x82\xB7\x82\xA9\x81\x48\x00',
-             b'\x00\xb7\xb5\xbb\xd8\xb1\xea\xcc\xe2\xc2\xf0\xa3\xbf\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', 1, '返回标题吗？'),
+             b'\x00\xb7\xb5\xbb\xd8\xb1\xea\xcc\xe2\xc2\xf0\xa3\xbf\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', -1, '返回标题吗？'),
             (b'\x00\x83Q\x81[\x83\x80\x82\xf0\x8fI\x97\xb9\x82\xb5\x82\xdc\x82\xb7\x82\xa9\x81H\x00', 0,
              b'\x00\x83Q\x81[\x83\x80\x82\xf0\x8fI\x97\xb9\x82\xb5\x82\xdc\x82\xb7\x82\xa9\x81H\x00',
-             b'\x00\xbd\xe1\xca\xf8\xd3\xce\xcf\xb7\xc2\xf0\xa3\xbf\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', 1, '结束游戏吗？'),
+             b'\x00\xbd\xe1\xca\xf8\xd3\xce\xcf\xb7\xc2\xf0\xa3\xbf\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', -1, '结束游戏吗？'),
             (b'\x00\x83\x8d\x81[\x83h\x82\xb5\x82\xdc\x82\xb7\x82\xa9\x81H\x00', 0,
              b'\x00\x83\x8d\x81[\x83h\x82\xb5\x82\xdc\x82\xb7\x82\xa9\x81H\x00',
-             b'\x00\xc8\xb7\xc8\xcf\xb6\xc1\xb5\xb5\xc2\xf0\xa3\xbf\x00\x00\x00\x00\x00', 1, '确认读档吗？'),
-
+             b'\x00\xc8\xb7\xc8\xcf\xb6\xc1\xb5\xb5\xc2\xf0\xa3\xbf\x00\x00\x00\x00\x00', -1, '确认读档吗？'),
+            (b'\x00\x82p\x83Z\x81[\x83u\x82\xb5\x82\xdc\x82\xb5\x82\xbd\x00', 0, 
+             b'\x00\x82p\x83Z\x81[\x83u\x82\xb5\x82\xdc\x82\xb5\x82\xbd\x00', 
+             b'\x00\xbf\xec\xcb\xd9\xb1\xa3\xb4\xe6\xb3\xc9\xb9\xa6\x00\x00\x00\x00\x00', -1, '快速保存成功')
         ]
         data = open_file_b(path)
         data = bytearray(data)
         for t in table:
-            for i in range(t[-2]):
+            if t[-2] == -1:
+                while True:
+                    if len(t[3]) != len(t[2]):
+                        print('元组错误：', t)
+                        return
+                    pos = data.find(t[0])
+                    if pos == -1:
+                        break
+                    pos += t[1]
+                    _len = len(t[2])
+                    if data[pos:pos+_len] != t[2]:
+                        print('目标不匹配：', data[pos:pos+_len], t)
+                        return
+                    data[pos:pos+_len] = t[3]
+                    print('替换成功：', t)
+
+            for _ in range(t[-2]):
                 if len(t[3]) != len(t[2]):
                     print('元组错误：', t)
                     return
@@ -3211,7 +3407,8 @@ class Lilim():
                 return v
             else:
                 return self.m_input.get_bits(8)
-
+    
+    '''
     def extract_for_vnr():
         def get_scenario_from_origin(data: list) -> list:
             text_all = []
@@ -3234,6 +3431,7 @@ class Lilim():
 
             return text_all
         extract_jp(get_scenario_from_origin, 'cp932')
+        '''
 
     def output_hook_dict(dict_name='test'):
         jp_chs = open_json('intermediate_file/jp_chs.json')
@@ -3274,7 +3472,7 @@ class Lilim():
             return text_all
         extract_jp(get_scenario_from_origin, 'cp932')
 
-    def fix_dixt():
+    def fix_dict():
         '''
         文本中不能出现半角的字母和\\f|\\n|[|]以外的符号
         删除(~|\(|\))
@@ -3310,6 +3508,7 @@ class Lilim():
         #             break
         # print(cnt)
 
+    """
     def output():
         def has_jp(line: str) -> bool:
             '''
@@ -3352,6 +3551,7 @@ class Lilim():
         save_file('intermediate_file/replaced.txt', '\n'.join(replaced))
         print('成功：', len(replaced))
         print('失败: ', len(failed))
+    """
 
 
 class RPM():

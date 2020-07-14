@@ -176,3 +176,230 @@ spFlowChartButton
 extra【回想01 拓己:逃げ出した先でモミモミコスコス】二人の行為を見て飛び出した先で、おばさんと出会う。感極まった僕はおばさんのおっぱいを…。
 
 80- a0
+
+
+# LiveMaker
+
+## File
+(
+    "version" / LsbVersionValidator(construct.Int32ul),
+    "flags" / construct.Byte,
+    "command_count" / construct.Int32ul,
+    "param_stream_size" / construct.Int32ul,
+    "command_params"
+    / construct.Array(
+        construct.this.command_count, _ParamStreamAdapter(construct.Bytes(construct.this.param_stream_size)),
+    ),
+    "commands" / construct.PrefixedArray(construct.Int32ul, construct.Select(*_command_structs)),
+)
+
+* version            0x0-0x4
+* flags              0x4-0x5
+* command_count      0x5-0x9
+* param_stream_size  0x9-0xD
+* command_params     0xD-
+* commands           
+
+
+
+## Command
+(
+    "type" / construct.Const(cls.type.name, construct.Enum(construct.Byte, CommandType)),
+    "Indent" / construct.Int32ul,
+    "Mute" / construct.Flag,
+    "NotUpdate" / construct.Flag,
+    "LineNo" / construct.Int32ul, construct.Embedded(cls._struct_fields)
+)
+ 
+
+## TextIns
+(
+   "Text" / construct.Prefixed(construct.Int32ul, TpWord._struct()),
+   "Target" / LiveParser._struct(),
+   "Hist" / LiveParser._struct(),
+   "Wait" / LiveParser._struct(),
+   "StopEvent" / construct.If(construct.this._._.version > 0x6A, LiveParser._struct()),
+)
+
+## TpWord
+(
+   "signature" / construct.Const(b"TpWord"),
+   "version" / _TpWordVersionAdapter(construct.Bytes(3)),
+   "decorators" / construct.PrefixedArray(construct.Int32ul, TDecorate._struct()),
+   "conditions" / construct.If(construct.this.version >= 104, construct.PrefixedArray(construct.Int32ul, TWdCondition._struct()),),
+   "links" / construct.If(construct.this.version >= 105, construct.PrefixedArray(construct.Int32ul, TWdLink._struct()),),
+   "body" / construct.PrefixedArray(construct.Int32ul, construct.Select(*select_subcons))
+)
+
+## TDecorate
+(
+    "count" / construct.Int32ul,
+    "unk2" / construct.Int32ul,
+    "unk3" / construct.Int32ul,
+    "unk4" / construct.Int32ul,
+    "unk5" / construct.Byte,
+    "unk6" / construct.Byte,
+    "unk7" / construct.IfThenElse(construct.this._._.version < 100, construct.Byte, construct.Int32ul),
+    "unk8" / construct.PascalString(construct.Int32ul, "cp932"),
+    "unk9" / construct.PascalString(construct.Int32ul, "cp932"),
+    "unk10" / construct.If(construct.this._._.version >= 100, construct.Int32ul,),
+    "unk11" / construct.If(construct.this._._.version >= 100, construct.Int32ul,),
+)
+
+## TWdCondition
+(
+    "count" / construct.Int32ul, 
+    "target" / construct.PascalString(construct.Int32ul, "cp932"),
+)
+
+## TWdLink
+(
+    "count" / construct.Int32ul,
+    "event" / construct.PascalString(construct.Int32ul, "cp932"),
+    "unk3" / construct.PascalString(construct.Int32ul, "cp932"),
+)
+
+## TWdChar
+(
+   "type" / construct.Const(b"\x01"),
+   "condition" / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+   "link_name" / construct.If(construct.this._._.version < 105, construct.PascalString(constructInt32ul, "cp932")),
+   "link" / construct.If(construct.this._._.version >= 105, construct.Int32sl),
+   "text_speed" / construct.Int32ul,
+   "ch" / _TWdCharAdapter(construct.Int16ul),
+   "decorator" / construct.Int32sl,
+)
+
+## TWdOpeDiv
+(
+   "type" / construct.Const(b"\x02"),
+   "condition" / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+   "align" / construct.Byte,
+   "padleft" / construct.If(construct.this._._.version >= 105, construct.Int32sl),
+   "padright" / construct.If(construct.this._._.version >= 105, construct.Int32sl),
+   "noheight" / construct.If(construct.this._._.version >= 105, construct.Byte),
+
+)
+
+## TWdOpeReturn
+(
+   "type" / construct.Const(b"\x03"),
+   "condition"  / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+   "break_type" / construct.Byte
+)
+
+## TWdOpeIndent
+(
+   "type" / construct.Const(b"\x04"),
+   "condition" / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+)
+
+## TWdOpeUndent
+(
+   "type" / construct.Const(b"\x05"),
+   "condition" / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+)
+
+## TWdOpeEvent
+(
+   "type" / construct.Const(b"\x06"),
+   "condition" / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+   "event" / construct.PascalString(construct.Int32ul, "cp932"),
+)
+
+
+## TWdOpeVar
+(
+   "type" / construct.Const(b"\x07"),
+   "condition" / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+   "decorator" / construct.Int32sl,
+   "unk3" / construct.If(construct.this._._.version >= 100, construct.Int32ul),
+   "link_name" / construct.If(100 <= construct.this._._.version < 105, construct.PascalString(construct.Int32ul, "cp932")),
+   "link" / construct.If(construct.this._._.version >= 105, construct.Int32sl),
+   "var_name_params" / construct.If(construct.this._._.version < 102, LiveParser._struct()),
+   "var_name" / construct.If(construct.this._._.version >= 102, construct.PascalString(construct.Int32ul, "cp932")),
+)
+
+## TWdImg
+(
+   "type" / construct.Const(b"\x09"),
+   "condition" / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+   "link_name" / construct.If(construct.this._._.version < 105, construct.PascalString(constructInt32ul, "cp932")),
+   "link" / construct.If(construct.this._._.version >= 105, construct.Int32sl),
+   "text_speed" / construct.Int32ul,
+   "src" / construct.PascalString(construct.Int32ul, "cp932"),
+   "align" / construct.Byte,
+   "hoversrc" / construct.If(construct.this._._.version >= 103, construct.PascalString(construct.Int32ul, "cp932")),
+   "mgnleft" / construct.If(construct.this._._.version >= 105, construct.Int32sl,),
+   "mgnright" / construct.If(construct.this._._.version >= 105, construct.Int32sl,),
+   "mgntop" / construct.If(construct.this._._.version >= 105, construct.Int32sl,),
+   "mgnbottom" / construct.If(construct.this._._.version >= 105, construct.Int32sl,),
+   "downsrc" / construct.If(construct.this._._.version >= 105, construct.PascalString(construct.Int32ul, "cp932")),
+)
+
+## OpeData
+(
+   "type" / construct.Enum(construct.Byte, OpeDataType),
+   "name" / construct.PascalString(construct.Int32ul, "cp932"),
+   "count" / construct.Int32ul,
+   "func" / construct.Switch(construct.this.type, {"Func": construct.Enum(construct.Byte, OpeFuncType)}),
+   "operands" / construct.Array(construct.this.count, Param._struct()),
+)
+
+## TWdOpeHistChar
+(
+   "type" / construct.Const(b"\x0A"),
+   "condition" / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+   "decorator" / construct.Int32sl,
+   "unk3" / construct.If(construct.this._._.version >= 100, construct.Int32ul),
+   "link_name" / construct.If(100 <= construct.this._._.version < 105, construct.PascalString(construct.Int32ul, "cp932")),
+   "link" / construct.If(construct.this._._.version >= 105, construct.Int32sl),
+   "var_name_params" / construct.If(construct.this._._.version < 102, LiveParser._struct()),
+   "var_name" / construct.If(construct.this._._.version >= 102, construct.PascalString(construct.Int32ul, "cp932")),
+)
+
+* type         0x00-0x01   0x14
+* Indent       0x01-0x05   0x0000
+* Mute         0x05-0x06   
+* NotUpdate    0x06-0x07
+* LineNo       0x07-0x0B
+* size         0x0B-0x0F      
+* signature    0x0F-0x15   TpWord
+* version      0x15-0x18
+* decorators   0x
+* conditions
+* links
+* body
+
+## 需要提取
+1. 人名NAMELABEL
+   (
+      "type" / construct.Const(b"\x06"),
+      "condition"  / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+      "size" / construct.Int32ul,
+      "name" / construct.Const(b"NAMELABEL\r\n"),
+      "vlaue" / onstruct.PascalString(construct.Int32ul-0xB, "cp932")
+   )  
+2. 文本 01 00 00 00 00 00 00 00 00 32 00 00 00 42 81 00 00 00 00
+   (
+      "type" / construct.Const(b"\x01"),
+      "condition" / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+      "link_name" / construct.If(construct.this._._.version < 105, construct.PascalString(constructInt32ul, "cp932")),
+      "link" / construct.If(construct.this._._.version >= 105, construct.Int32sl),
+      "text_speed" / construct.Int32ul,
+      "ch" / _TWdCharAdapter(construct.Int16ul),
+      "decorator" / construct.Int32sl,
+   )
+3. <PG> 03 00 00 00 00 01
+   (
+      "type" / construct.Const(b"\x03"),
+      "condition"  / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+      "break_type" / construct.Const(b"\x01"),
+   )
+4. <BR> 03 00 00 00 00 00
+   (
+      "type" / construct.Const(b"\x03"),
+      "condition"  / construct.If(construct.this._._.version >= 104, construct.Int32sl),
+      "break_type" / construct.Const(b"\x00"),
+   )
+5. <STYLE></STYLE>  文本的decorator=0x01
