@@ -1164,22 +1164,9 @@ class XFL():
 
 class LIVEMAKER():
     '''
-    提取LIVAMEKER的文本，处理字典提高VNR命中率
-    .lsb
-    header
-    0-4  version
-    4-5    unk
-    5-9  count
-    9-13 size
+    汉化EXE
+    修改createfonta -> 0x86
 
-    entry
-
-    body
-    0-1  opcode
-    1-5  indent
-    5-6  mute
-    6-7  not_update
-    7-11 line_number
     '''
     def get_text_from_lsb():
         for f in os.listdir('input'):
@@ -1235,44 +1222,49 @@ class LIVEMAKER():
             ans[line] = ''
         save_json('intermediate_file/jp_chs.json', ans)
 
-    def _text_from_cmds(cmds, version) -> str:
+    def _text_from_cmds(cmds, version, name=None) -> str:
         # print(cmds)
-        _buff = b''
+        _buff = ''
         
         for cmd in cmds:
-            _pos = 1
-            if cmd[0] == 0x3:
+            # if cmd[0] not in (1, 3):
+            #     print(cmds)
+            #     raise Exception()
+            if cmd[0] == 3:
                 break
-            _pos += 4 if version >= 104 else 0
-            if version < 105:
-                _pos += from_bytes(cmd[_pos:_pos+4]) + 4
-            _pos += 4 if version >= 105 else 0
-            _pos += 4
-            _t = cmd[_pos:_pos+2]
-            _t.reverse()
-            if _t[0] == 0:
-                _t = _t[1:]
-            _buff += _t
-            _pos += 6
+            if cmd[0] == 7:
+                _buff += name if name else '主役'
+            if cmd[0] == 1:
+                _t = cmd[-6:-4]
+                _t.reverse()
+                if _t[0] == 0:
+                    _t = _t[1:]
+                _buff += _t.decode('cp932')
         cmd = cmds[-1]
 
-        return _buff.decode('cp932') + ('<PG>' if cmd[-1] else '<BR>')
+        _str = _buff + ('<PG>' if cmd[-1] else '<BR>')
+        # if _str.find('は、顔を見合わせる。<PG>') != -1:
+        #     print(cmds)
+        return _str
 
-    def extract():
+    def extract(name=None):
+        '''
+        FIXME 抽取选择支
+        '''
         file_all = os.listdir('input')
         ans = []
+        buttons = []
         for f in file_all:
-            print(f)
+            _cnt = 0
             data = open_file_b(f'input/{f}')
             data = bytearray(data)
             _p = 0
             while _p < len(data):
                 if data[_p:_p+1] == b'T' and data[_p:_p+6] == b'TpWord':
-                    
+                    _line = from_bytes(data[_p-8:_p-4])
                     _length_TpWord = from_bytes(data[_p-4:_p])
                     _start_TpWord = _p
                     _TpWord = data[_p:_p+_length_TpWord]
-                    _buff = b''
                     _version = int(_TpWord[6:9].decode())
                     if _version < 102:
                         raise Exception(f'version can not be lower than 102!')
@@ -1326,7 +1318,7 @@ class LIVEMAKER():
                     _pos += 4
                     _start = 0
                     _cmds = []
-                    print(hex(_pos))
+                    # print(hex(_pos))
                     while _pos < len(_TpWord):
                         _opcode = _TpWord[_pos]
                         _start = _pos
@@ -1357,10 +1349,7 @@ class LIVEMAKER():
                         elif _opcode == 0x06:
                             _size = from_bytes(_TpWord[_pos:_pos+4])
                             _pos += 4
-                            # _value = _TpWord[_pos:_pos+_size]
                             _pos += _size
-                            # if _value[:9] == b'NAMELABEL':
-                            #     ans.append(_value)
                         # TWdOpeVar
                         elif _opcode == 0x07:
                             _pos += 4
@@ -1379,8 +1368,7 @@ class LIVEMAKER():
                                 _pos += 4
                             _pos += 4 if _version >= 105 else 0
                             _pos += 4
-                            _size = from_bytes(_TpWord[_pos:_pos+4])
-                            _pos += 4
+                            _pos += (from_bytes(_TpWord[_pos:_pos+4])+4)
                             _pos += 1
                             if _version >= 103:
                                 _pos += from_bytes(_TpWord[_pos:_pos+4])
@@ -1414,15 +1402,279 @@ class LIVEMAKER():
                             _start = idx
                         if _cmd[0] == 0x3 and _start != -1:
                             # print(_start, idx)
-                            _str = LIVEMAKER._text_from_cmds(_cmds[_start: idx+1], _version)
+                            _str = LIVEMAKER._text_from_cmds(_cmds[_start: idx+1], _version, name)
                             # print(_str)
                             ans.append(_str)
+                            _cnt += 1
                             _start = -1
+                        if _cmd[0] == 0x6:
+                            # _size = from_bytes(_cmd[1:5])
+                            _t = 5 + 4 if _version >= 104 else 0
+                            _value = _cmd[_t:]
+                            if _value[:9] == b'NAMELABEL':
+                                _value = _value.decode('cp932')
+                                _value = _value.replace('\n', '\\n')
+                                _value = _value.replace('\r', '\\r')
+                                ans.append(_value)
+                                _cnt += 1
                     
-                    print(f, 'Tpword', hex(_p), len(_cmds))
+                    # print(f, 'Tpword', hex(_p), '\tline', _line, '\tcnt', len(_cmds))
                     _p += _length_TpWord
+                if data[_p:_p+1] == b'\x5f' and data[_p:_p+0xA] == b'\x5F\x5F\x5F\x5F\x30\x01\x00\x00\x00\x04':
+                    _p += 0xA
+                    _len = from_bytes(data[_p:_p+4])
+                    _p += 4
+                    _str = data[_p:_p+_len]
+                    try:
+                        if len(_str) < 40 and _str[0] != 0xD:
+                            _str = _str.decode('cp932')
+                            buttons.append(_str)
+                            _cnt += 1
+                    except Exception:
+                        pass
+                    _p += _len
                 _p += 1
-        save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
+            print(f, '\t', _cnt)
+        save_file('intermediate_file/jp_all.txt', '\n'.join(ans+buttons))
+
+    def _text_to_cmds(text:str, version:int, speed:bytes, name=None) -> list:
+        res = []
+        end = text[-4:]
+        text = text.replace('・', '·')
+        text = text.replace('♪', '')
+        text = text[:-4]
+        for ch in text:
+            ch = bytearray(ch.encode('gbk'))
+            ch.reverse()
+            ch += b'\x00' if len(ch) < 2 else b''
+            _t = b'\x01'
+            _t += b'\x00\x00\x00\x00' if version >= 104 else b''
+            _t += b'\x00\x00\x00\x00' if version < 105 else b''
+            _t += b'\x00\x00\x00\x00' if version >= 105 else b''
+            _t += speed
+            _t += ch
+            _t += b'\x00\x00\x00\x00'
+            res.append(_t)
+        _t = b'\x03'
+        _t += b'\x00\x00\x00\x00' if version >= 104 else b''
+        _t += b'\x01' if end == '<PG>' else b'\x00'
+        res.append(_t)
+        # print(res)
+        # raise Exception()
+        return res
+
+    def output(name=None):
+        file_all = os.listdir('input')
+        jp_chs = open_json('intermediate_file/jp_chs.json')
+        failed = []
+        cnt = 0
+        for f in file_all:
+            print(f)
+            data = open_file_b(f'input/{f}')
+            data = bytearray(data)
+            _p = 0
+            while _p < len(data):
+                if data[_p:_p+1] == b'T' and data[_p:_p+6] == b'TpWord':
+                    _line = from_bytes(data[_p-8:_p-4])
+                    _length_TpWord = from_bytes(data[_p-4:_p])
+                    _start_TpWord = _p
+                    _TpWord = data[_p:_p+_length_TpWord]
+                    _version = int(_TpWord[6:9].decode())
+                    if _version < 102:
+                        raise Exception(f'version can not be lower than 102!')
+                    _pos = 9
+
+                    # 跳过decorators
+                    _decorator_num = from_bytes(_TpWord[_pos:_pos+4])
+                    _pos += 4
+                    for _ in range(_decorator_num):
+                        _pos += 0x4*4+2
+                        _pos += 1 if _version < 100 else 4
+                        _pos += from_bytes(_TpWord[_pos:_pos+4])
+                        _pos += 4
+                        _pos += from_bytes(_TpWord[_pos:_pos+4])
+                        _pos += 4
+                        _pos += 4 if _version >= 100 else 0
+                        _pos += 4 if _version >= 100 else 0
+
+                    # 跳过conditions
+                    _condition_count_pos = -1
+                    if _version >= 104:
+                        _condition_num = from_bytes(_TpWord[_pos:_pos+4])
+                        _pos += 4
+                        _condition_count_pos = _pos
+                        for _ in range(_condition_num):
+                            _pos += 4
+                            _pos += from_bytes(_TpWord[_pos:_pos+4])
+                            _pos += 4
+
+                    # 跳过links
+                    if _version >= 105:
+                        _links_num = from_bytes(_TpWord[_pos:_pos+4])
+                        _pos += 4
+                        for _ in range(_links_num):
+                            _pos += 4
+                            _pos += from_bytes(_TpWord[_pos:_pos+4])
+                            _pos += 4
+                            _pos += from_bytes(_TpWord[_pos:_pos+4])
+                            _pos += 4
+
+                    # 抽取命令
+                    '''
+                    TWdChar = 0x01
+                    TWdOpeDiv = 0x02
+                    TWdOpeReturn = 0x03
+                    TWdOpeIndent = 0x04
+                    TWdOpeUndent = 0x05
+                    TWdOpeEvent = 0x06
+                    TWdOpeVar = 0x07
+                    TWdImg = 0x09
+                    TWdOpeHistChar = 0x0A
+                    '''
+                    _cmd_num_pos = _pos
+                    _pos += 4
+                    _start = 0
+                    _cmds = []
+                    # print(hex(_pos))
+                    while _pos < len(_TpWord):
+                        _opcode = _TpWord[_pos]
+                        _start = _pos
+                        # print(_opcode, hex(_pos))
+                        _pos += 1
+                        _pos += 4 if _version >= 104 else 0
+                        # 文本TWdChar
+                        if _opcode == 0x01:
+                            if _version < 105:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4]) + 4
+                            _pos += 4 if _version >= 105 else 0
+                            _pos += 4
+                            _pos += 6
+                        # TWdOpeDiv
+                        elif _opcode == 0x02:
+                            _pos += 1
+                            _pos += 9 if _version >= 105 else 0
+                        # TWdOpeReturn
+                        elif _opcode == 0x03:
+                            _pos += 1
+                        # TWdOpeIndent
+                        elif _opcode == 0x04:
+                            pass
+                        # TWdOpeUndent
+                        elif _opcode == 0x05:
+                            pass
+                        # TWdOpeEvent NAME
+                        elif _opcode == 0x06:
+                            _size = from_bytes(_TpWord[_pos:_pos+4])
+                            _pos += 4
+                            _pos += _size
+                        # TWdOpeVar
+                        elif _opcode == 0x07:
+                            _pos += 4
+                            _pos += 4 if _version >= 100 else 0
+                            if 100 <= _version < 105:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                            _pos += 4 if _version >= 105 else 0
+                            if 102 <= _version:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                        # TWdImg
+                        elif _opcode == 0x09:
+                            if _version < 105:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                            _pos += 4 if _version >= 105 else 0
+                            _pos += 4
+                            _pos += (from_bytes(_TpWord[_pos:_pos+4])+4)
+                            _pos += 1
+                            if _version >= 103:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                            _pos += 16 if _version >= 105 else 0
+                            if _version >= 105:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                        # OpeData
+                        elif _opcode == 0x0A:
+                            _pos += 4
+                            _pos += 4 if _version >= 100 else 0
+                            if 100 <= _version < 105:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                            _pos += 4 if _version >= 105 else 0
+                            if 102 <= _version:
+                                _pos += from_bytes(_TpWord[_pos:_pos+4])
+                                _pos += 4
+                        else:
+                            raise Exception(f'JMP ERROR! {hex(_opcode)} {hex(_p)} {hex(_pos)} {hex(_pos + _p)}')
+                        _cmds.append(_TpWord[_start: _pos])
+                    
+                    # 替换文本
+                    _start = -1
+                    idx = 0
+                    _new_cmds = []
+                    while idx < len(_cmds):
+                        _cmd = _cmds[idx]
+                        if _cmd[0] == 0x1 and _start == -1:
+                            _start = idx
+                        elif _cmd[0] == 0x3 and _start != -1:
+                            _str = LIVEMAKER._text_from_cmds(_cmds[_start: idx+1], _version, name)
+                            if _str in jp_chs and jp_chs[_str]:
+                                _new_cmd_text = LIVEMAKER._text_to_cmds(jp_chs[_str], _version, _cmds[_start][-0xA:-0x06], name)
+                                _new_cmds += _new_cmd_text
+                                cnt += 1
+                            else:
+                                failed.append(_str)
+                                _new_cmds += _cmds[_start: idx+1]
+                            _start = -1
+                        elif _cmd[0] == 0x6:
+                            _t = 5 + 4 if _version >= 104 else 0
+                            _value = _cmd[_t:]
+                            if _value[:9] == b'NAMELABEL':
+                                _value = _value.decode('cp932')
+                                _value = _value.replace('\n', '\\n')
+                                _value = _value.replace('\r', '\\r')
+                                if _value in jp_chs and jp_chs[_value]:
+                                    _new_value = jp_chs[_value]
+                                    _new_value = _new_value.replace('\\n', '\n')
+                                    _new_value = _new_value.replace('\\r', '\r')
+                                    _cmd[_t+4:_t] = to_bytes(len(_new_value))
+                                    _cmd[_t:] = _new_value.encode('gbk')
+                                else:
+                                    failed.append(_value)
+                            _new_cmds.append(_cmd)
+                        elif _cmd[0] == 0x1 and _start != -1:
+                            pass
+                        else:
+                            _new_cmds.append(_cmd)
+                        idx += 1                    
+                    
+                    # 组合TpWord
+                    _new_TpWord = _TpWord[:_cmd_num_pos] + to_bytes(len(_new_cmds), 4) + b''.join(_new_cmds)
+                    # 修改参数个数
+                    if (_version >= 104):
+                        _new_TpWord[_condition_count_pos:_condition_count_pos+4] = to_bytes(len(_new_cmds), 4)
+                    # 修改TpWord长度
+                    data[_start_TpWord-4:_start_TpWord] = to_bytes(len(_new_TpWord), 4)
+                    # 替换TpWord
+                    data[_start_TpWord:_start_TpWord+_length_TpWord] = _new_TpWord                    
+                    # print(f, 'Tpword', hex(_p), len(_cmds))
+                    
+                    # if _line == 570:
+                    #     print(_new_cmds)
+                    #     print(_new_TpWord)
+                    #     print(_cmd_num_pos, _condition_count_pos, hex(len(_new_TpWord)), hex(_p), hex(_p+len(_new_TpWord)))
+                    _p += len(_new_TpWord)
+                    # print(_new_TpWord)
+                    # return
+                _p += 1
+            save_file_b(f'output/{f}', data)
+        print('替换：', cnt)
+
+    def extract_exe(path):
+        data = open_file_b(path)
+        offset = from_bytes(data[-6:-2])
+        save_file_b('new_'+path, data[:offset])
 
 
 class YU_RIS():
@@ -3209,7 +3461,7 @@ class Lilim():
         2. 文字边界检查 8A 03 57 33 FF 3C 81
     3. 全局变量
         1. 文本 下面第二个 FF D5 68 00 00 01 00 6A 08 50 FF D6
-        2. 人名 下面  53 53 53 53 53 53 B9 02 00 00 00 E8
+        2. 人��� 下面  53 53 53 53 53 53 B9 02 00 00 00 E8
         3. 选择支 上面 83 C4 08 33 C9 39 37 74
     4. 字符集 88 5E 57 2B D0 8D 64 24 
     '''

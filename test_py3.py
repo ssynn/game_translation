@@ -1,6 +1,5 @@
 import construct
 from scr.public_function import *
-# import scr.lmdis as lm
 
 if __name__ == "__main__":
     # print(SNL._split_line('えっ！？いや、そんなつもりは‥‥ないけど。'))
@@ -40,52 +39,9 @@ if __name__ == "__main__":
     # XFL.extract_gsc()
     # XFL.output_gsc()
 
-    LIVEMAKER.extract()
-
-    # TDecorate = construct.Struct(
-    #     "count" / construct.Int32ul,
-    #     "unk2" / construct.Int32ul,
-    #     "unk3" / construct.Int32ul,
-    #     "unk4" / construct.Int32ul,
-    #     "unk5" / construct.Byte,
-    #     "unk6" / construct.Byte,
-    #     "unk7" / construct.IfThenElse(construct.this._._.version < 100, construct.Byte, construct.Int32ul),
-    #     "unk8" / construct.PascalString(construct.Int32ul, "cp932"),
-    #     "unk9" / construct.PascalString(construct.Int32ul, "cp932"),
-    #     "unk10" / construct.If(construct.this._._.version >= 100, construct.Int32ul,),
-    #     "unk11" / construct.If(construct.this._._.version >= 100, construct.Int32ul,),
-    # )
-
-    # TWdCondition = construct.Struct(
-    #     "count" / construct.Int32ul, 
-    #     "target" / construct.PascalString(construct.Int32ul, "cp932"),
-    # )
-
-    # TWdCondition = construct.Struct(
-    #     "count" / construct.Int32ul, 
-    #     "target" / construct.PascalString(construct.Int32ul, "cp932"),
-    # )
-
-    # TWdLink = construct.Struct(
-    #     "count" / construct.Int32ul,
-    #     "event" / construct.PascalString(construct.Int32ul, "cp932"),
-    #     "unk3" / construct.PascalString(construct.Int32ul, "cp932"),
-    # )
-
-    # TpWord = construct.Struct(
-    #     "signature" / construct.Const(b"TpWord"),
-    #     "version" / construct.Bytes(3),
-    #     "decorators" / construct.PrefixedArray(construct.Int32ul, TDecorate),
-    #     "conditions" / construct.PrefixedArray(construct.Int32ul, TWdCondition),
-    #     "links" / construct.PrefixedArray(construct.Int32ul, TWdLink),
-    #     # "body" / construct.PrefixedArray(construct.Int32ul, construct.Select(*select_subcons))
-    # )
-
-    
-    # # data = b'\x54\x70\x57\x6F\x72\x64\x31\x30\x35\x00\x00\x00\x00\x01\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00\x06\x00\x00\x00\x00'
-    # a  = construct.PascalString(construct.Int32ul, "cp932")
-    
-    # print(a.parse(b'\x06\x00\x00\x00\x81\x42\x81\x75\x81\x75'))
-
+    LIVEMAKER.extract('慶子')
+    # print(LIVEMAKER._create_text('「123いや～…こう何度も引越しとなると…大変……」', 105, b'\x03\x00\x00\x00\x00\x01', b'\x32\x00\x00\x00'))
+    # LIVEMAKER.output('慶子')
+    # LIVEMAKER.extract_exe('全裸で宴会芸をさせられた妻～フルボイス版.exe')
 
     pass
