@@ -1,4 +1,3 @@
-import construct
 from scr.public_function import *
 
 if __name__ == "__main__":
@@ -10,7 +9,7 @@ if __name__ == "__main__":
     # MED.fix_dict()
     # MED.output()
     # MED.repack('output')
-    # MED.fix_exe('EXSTIAA.EXE')
+    # MED.fix_exe('EXSTIAse09.EXE')
 
     # ANIM.extract()
     # ANIM.output()
@@ -25,7 +24,6 @@ if __name__ == "__main__":
 
     # RPM.unpack_arc()
     # RPM.repack_arc()
-    # print(RPM.formate('　なあ、<WinRubi 福永,ふくなが><WinRubi 裕人,ゆうと>よ！！」'))
 
     # NEKOSDK.extract_pak_txt()
     # NEKOSDK.output()
@@ -34,14 +32,15 @@ if __name__ == "__main__":
     # SILKY.output()
 
     # YU_RIS.extract_ybn()
-    # YU_RIS.output_ybn(encrypt=1)
+    # YU_RIS.output_ybn(output_all=1)
     
     # XFL.extract_gsc()
     # XFL.output_gsc()
 
-    LIVEMAKER.extract('慶子')
-    # print(LIVEMAKER._create_text('「123いや～…こう何度も引越しとなると…大変……」', 105, b'\x03\x00\x00\x00\x00\x01', b'\x32\x00\x00\x00'))
-    # LIVEMAKER.output('慶子')
-    # LIVEMAKER.extract_exe('全裸で宴会芸をさせられた妻～フルボイス版.exe')
+    # LIVEMAKER.extract()
+    # LIVEMAKER.output()
+    LIVEMAKER.extract_exe('全裸でヌードモデルをさせられた妻◆地獄編.exe')
 
+    # NScript.extract()
+    # NScript.output()
     pass

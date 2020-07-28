@@ -1165,20 +1165,9 @@ class XFL():
 class LIVEMAKER():
     '''
     汉化EXE
-    修改createfonta -> 0x86
+    在GetglyphoutlineA 上面 的 createfontindirecta -> 0x86
 
     '''
-    def get_text_from_lsb():
-        for f in os.listdir('input'):
-            os.system(
-                f'lmlsb dump -m lines input/{f} -o intermediate_file/{f}')
-
-    def dump_lsb(path='input'):
-        file_all = os.listdir(path)
-        for f in file_all:
-            os.system(
-                f'lmlsb dump -m text {path}/{f} -o intermediate_file/{f}')
-
     def optimize_livemaker_dict():
         jp_chs = open_json('intermediate_file/jp_chs copy.json')
         jp_all = open_file('intermediate_file/jp_all.txt').splitlines()
@@ -1444,7 +1433,12 @@ class LIVEMAKER():
         text = text.replace('♪', '')
         text = text[:-4]
         for ch in text:
-            ch = bytearray(ch.encode('gbk'))
+            try:
+                ch = bytearray(ch.encode('gbk'))
+            except Exception as e:
+                print(e)
+                print(text)
+                raise Exception()
             ch.reverse()
             ch += b'\x00' if len(ch) < 2 else b''
             _t = b'\x01'
@@ -1671,15 +1665,34 @@ class LIVEMAKER():
             save_file_b(f'output/{f}', data)
         print('替换：', cnt)
 
-    def extract_exe(path):
+    def extract_exe(path, chinesization=True):
+        '''
+        F6 45 08 08 74 04 C6 45 BA 01
+        C6 45 BB 86 90 90 90 90 90 90
+
+        F6 45 18 08 74 06 C6 47 16 01
+        C6 47 17 86 90 90 90 90 90 90
+        '''
         data = open_file_b(path)
         offset = from_bytes(data[-6:-2])
-        save_file_b('new_'+path, data[:offset])
+        exe = data[:offset]
+        # exe = bytearray(exe)
+        if chinesization:
+            if exe.find(b'\xF6\x45\x08\x08\x74\x04\xC6\x45\xBA\x01') != -1:
+                exe = exe.replace(b'\xF6\x45\x08\x08\x74\x04\xC6\x45\xBA\x01', b'\xC6\x45\xBB\x86\x90\x90\x90\x90\x90\x90')
+                print('汉化成功！')
+            elif exe.find(b'\xF6\x45\x18\x08\x74\x06\xC6\x47\x16\x01') != -1:
+                exe = exe.replace(b'\xF6\x45\x18\x08\x74\x06\xC6\x47\x16\x01', b'\xC6\x47\x17\x86\x90\x90\x90\x90\x90\x90')
+                print('汉化成功！')
+            else:
+                print('汉化失败！')
+        save_file_b('new_'+path, exe)
 
 
 class YU_RIS():
     '''
     解密ybn，提取文本，插入文本，加密ybn
+    需要手动删除提取出来的无用文本
 
     ver 290:
     4Byte length 4Byte offset
@@ -1918,7 +1931,7 @@ class YU_RIS():
                                                       all_parameter[i]['char_count_32']]
                 _str = extract(all_parameter[i]['str'])
 
-                # if _str in ['店長に言われ、俺は店の看板の電気を消した。', '小次郎「一平くん、そろそろお店をしめよう」']:
+                # if _str.count('「あ、いえ、ごめんなさい。'):
                 #     print(methord_code[i], _str)
                 if header['version_32'] == 481:
                     scenario_code, button_code = 106, 44
@@ -2225,7 +2238,7 @@ class YU_RIS():
         # save_json('intermediate_file/jp_chs.json', jp_chs)
 
     # output
-    def output_ybn(_input='input', output='output', jp_chs='intermediate_file/jp_chs.json', encrypt=True):
+    def output_ybn(_input='input', output='output', jp_chs='intermediate_file/jp_chs.json', encrypt=True, output_all=False):
         '''
         1. 替换input文件夹内ybn的字符串，使用gbk编码，保存到output文件夹内
         2. 加密output文件夹内的ybn文件
@@ -2249,11 +2262,13 @@ class YU_RIS():
             if _t[2]:
                 # print(f, "失败：", len(_t[2]))
                 ...
-            if _t[1]:
+            if _t[0]:
+                data = _t[0]
+            if _t[1] or output_all:
                 print(f, "替换：", _t[1])
                 if not os.path.exists(output):
                     os.mkdir(output)
-                save_file_b(f'{output}/{f}', _t[0])
+                save_file_b(f'{output}/{f}', data)
         save_file('intermediate_file/failed.txt', '\n'.join(failed))
         print('失败：', len(failed))
 
@@ -3019,7 +3034,7 @@ class MED():
             print(bytearray(key))
             key = bytearray(map(lambda x: x & 0xff, key))
             key = remove_dumplicate_str(key)
-            print(bytearray(key))
+            # print(bytearray(key))
             ans = {
                 'name_list': name_list,
                 'key': key.decode('cp932'),
@@ -3945,3 +3960,51 @@ class RPM():
             output_data[pos+8] = (output_data[pos+8] -
                                   key[pos % len(key)]) & 0xff
         save_file_b('msg.arc', output_data)
+
+
+class NScript():
+    '''
+    textouta push 0x80 -> push 0x86
+    '''
+    def extract():
+        file_all = os.listdir('input')
+        data = open_file_b('input/nscript.dat')
+        if 'decoded' not in file_all:
+            data = bytearray(data)
+            idx = 0
+            while idx < len(data):
+                data[idx] ^= 0x84
+                idx += 1
+            save_file_b('input/nscript.dat', data)
+            save_file('input/decoded', '')
+            print('file decoded')
+        file_data = data.decode('cp932')
+        jp_all = file_data.splitlines()
+        ans = []
+        for line in jp_all:
+            if has_jp(line) and line[0] not in '*; abcdefghijklmnopqrstuvwxyz':
+                ans.append(line)
+        save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
+
+    def output():
+        jp_chs = open_json('intermediate_file/jp_chs.json')
+        jp = open_file('input/nscript.dat', encoding='cp932').splitlines()
+        cnt = 0
+        failed = []
+        for idx, line in enumerate(jp):
+            if has_jp(line) and line[0] not in '*; abcdefghijklmnopqrstuvwxyz':
+                if line in jp_chs and jp_chs[line]:
+                    jp[idx] = jp_chs[line]
+                    cnt += 1
+                else:
+                    failed.append(line)
+        data = bytearray('\n'.join(jp).encode('gbk', errors='ignore'))
+        # data = bytearray(open_file_b('input/nscript.dat').decode('cp932').encode('gbk', errors='ignore'))
+        idx = 0
+        while idx < len(data):
+            data[idx] ^= 0x84
+            idx += 1
+        save_file_b('output/nscript.dat', data)
+        save_file('intermediate_file/failed.txt', '\n'.join(failed))
+        print('替换：', cnt)
+        print('失败：', len(failed))

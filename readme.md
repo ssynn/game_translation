@@ -33,6 +33,7 @@
 * ANIM
 * Lilim
 * RPM
+* NScript
 
 ## 注意
 * 只测试过我玩过的游戏
