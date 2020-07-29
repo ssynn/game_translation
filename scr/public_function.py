@@ -5,6 +5,7 @@ import json
 import chardet
 import sqlite3
 import random
+import base64
 import scr.langconv as lc
 import matplotlib.pyplot as plt
 # from Crypto.Cipher import AES
@@ -503,17 +504,6 @@ def create_database():
     ''')
     conn.commit()
     conn.close()
-
-
-def create_failed_dict():
-    data = open_file('intermediate_file/failed.txt').splitlines()
-    failed_dict = dict()
-    for line in data:
-        line = split_line(line)
-        for item in line:
-            if has_jp(item):
-                failed_dict[item] = ''
-    save_json('intermediate_file/failed.json', failed_dict)
 
 
 def replace_all(find_text, encoding, output_encoding):
@@ -1167,7 +1157,7 @@ class LIVEMAKER():
     汉化EXE
     在GetglyphoutlineA 上面 的 createfontindirecta -> 0x86
 
-    '''
+    
     def optimize_livemaker_dict():
         jp_chs = open_json('intermediate_file/jp_chs copy.json')
         jp_all = open_file('intermediate_file/jp_all.txt').splitlines()
@@ -1210,8 +1200,8 @@ class LIVEMAKER():
             line = line.replace('　', '')
             ans[line] = ''
         save_json('intermediate_file/jp_chs.json', ans)
-
-    def _text_from_cmds(cmds, version, name=None) -> str:
+    '''
+    def _text_from_cmds(cmds, version) -> str:
         # print(cmds)
         _buff = ''
         
@@ -1221,8 +1211,9 @@ class LIVEMAKER():
             #     raise Exception()
             if cmd[0] == 3:
                 break
-            if cmd[0] == 7:
-                _buff += name if name else '主役'
+            if cmd[0] == 7 and version <= 102:
+                _len = from_bytes(cmd[13:17])
+                _buff += f"<{cmd[-_len:].decode('cp932')}>"
             if cmd[0] == 1:
                 _t = cmd[-6:-4]
                 _t.reverse()
@@ -1236,7 +1227,7 @@ class LIVEMAKER():
         #     print(cmds)
         return _str
 
-    def extract(name=None):
+    def extract():
         '''
         FIXME 抽取选择支
         '''
@@ -1383,21 +1374,15 @@ class LIVEMAKER():
                     
                     # 抽取文本
                     _start = -1
-                    # print(_cmds)
-                    # if len(ans):
-                    #     return
                     for idx, _cmd in enumerate(_cmds):
-                        if _cmd[0] == 0x1 and _start == -1:
+                        if (_cmd[0] == 0x1 or _cmd[0] == 0x7) and _start == -1:
                             _start = idx
                         if _cmd[0] == 0x3 and _start != -1:
-                            # print(_start, idx)
-                            _str = LIVEMAKER._text_from_cmds(_cmds[_start: idx+1], _version, name)
-                            # print(_str)
+                            _str = LIVEMAKER._text_from_cmds(_cmds[_start: idx+1], _version)
                             ans.append(_str)
                             _cnt += 1
                             _start = -1
                         if _cmd[0] == 0x6:
-                            # _size = from_bytes(_cmd[1:5])
                             _t = 5 + 4 if _version >= 104 else 0
                             _value = _cmd[_t:]
                             if _value[:9] == b'NAMELABEL':
@@ -4008,3 +3993,444 @@ class NScript():
         save_file('intermediate_file/failed.txt', '\n'.join(failed))
         print('替换：', cnt)
         print('失败：', len(failed))
+
+
+class RPGMakerVX():
+    def extract():
+        '''
+        文本code：3B 39 08 3B 3A 69 00 3B 31 69 02 91 01 3B 32 5B 06 49 22 
+        公共事件code：3B 0B 08 3B 0C 69 00 3B 0D 69 02 91 01 3B 0E 5B 06 49 22
+        人名code: 3B 06 49 22
+        '''
+        file_all = os.listdir('input')
+        event = ['\n\nevent']
+        public_event = ['\n\npublic_event']
+        name = ['\n\nname']
+        system = ['\n\nsystem']
+        skills = ['\n\nskills']
+        weapons = ['\n\nWeapon']
+        items = ['\n\nitems']
+        armors = ['\n\nArmors']
+        
+        for f in file_all:
+            _data = open_file_b(f'input/{f}')
+            _data = bytearray(_data)
+            _p = 0
+            if f == 'System.rvdata2':
+                while _p < len(_data):
+                    if _data[_p] == 0x22:
+                        _p += 1
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                system.append(_str)
+                        except Exception as e:
+                            print(f, 'system')
+                            print(e)
+                            print(_str_b)
+                        _p += _len
+                    else:
+                        _p += 1
+            if f == 'Skills.rvdata2':
+                while _p < len(_data):
+                    if _data[_p] == 0x49 and _data[_p:_p+2] == b'\x49\x22':
+                        _p += 2
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                skills.append(_str)
+                        except Exception as e:
+                            print(f, 'skills')
+                            print(e)
+                            print(_str_b)
+                        _p += _len
+                    else:
+                        _p += 1
+            if f == 'Armors.rvdata2':
+                while _p < len(_data):
+                    if _data[_p] == 0x49 and _data[_p:_p+2] == b'\x49\x22':
+                        _p += 2
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                armors.append(_str)
+                        except Exception as e:
+                            print(f, 'armors')
+                            print(e)
+                            print(_str_b)
+                        _p += _len
+                    else:
+                        _p += 1
+            if f == 'Actors.rvdata2':
+                while _p < len(_data):
+                    if _data[_p] == 0x49 and _data[_p:_p+0x2] == b'\x49\x22':
+                        _p += 0x2
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                name.append(_str)
+                        except Exception as e:
+                            print(f, 'name')
+                            print(e)
+                            print(_str_b)
+                        _p += _len
+                    else:
+                        _p += 1
+            if f == 'Weapons.rvdata2':
+                while _p < len(_data):
+                    if _data[_p] == 0x49 and _data[_p:_p+2] == b'\x49\x22':
+                        _p += 2
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                weapons.append(_str)
+                        except Exception as e:
+                            print(f, 'weapons')
+                            print(e)
+                            print(_str_b)
+                        _p += _len
+                    else:
+                        _p += 1
+            if f == 'Items.rvdata2':
+                while _p < len(_data):
+                    if _data[_p] == 0x49 and _data[_p:_p+2] == b'\x49\x22':
+                        _p += 2
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                items.append(_str)
+                        except Exception as e:
+                            print(f, 'items')
+                            print(e)
+                            print(_str_b)
+                        _p += _len
+                    else:
+                        _p += 1
+            while _p < len(_data):
+                if _data[_p] == 0x3B and _data[_p:_p+0x13] == b'\x3B\x39\x08\x3B\x3A\x69\x00\x3B\x31\x69\x02\x91\x01\x3B\x32\x5B\x06\x49\x22':
+                    _p += 0x13
+                    _len = _data[_p]
+                    _p += 1
+                    _str_b = _data[_p:_p+_len]
+                    try:
+                        _str = _str_b[:-5].decode('utf8')
+                        if has_jp(_str):
+                            _str = _str.replace('\n', '\\n')
+                            _str = _str.replace('\r', '\\r')
+                            event.append(_str)
+                    except Exception as e:
+                        print(f, 'event')
+                        print(e)
+                        print(_str_b)
+                        return
+                    _p += _len
+                elif _data[_p] == 0x3B and _data[_p:_p+0x13] == b'\x3B\x0B\x08\x3B\x0C\x69\x00\x3B\x0D\x69\x02\x91\x01\x3B\x0E\x5B\x06\x49\x22':
+                    _p += 0x13
+                    _len = _data[_p]
+                    _p += 1
+                    _str_b = _data[_p:_p+_len]
+                    try:
+                        _str = _str_b[:-5].decode('utf8')
+                        if has_jp(_str):
+                            _str = _str.replace('\n', '\\n')
+                            _str = _str.replace('\r', '\\r')
+                            public_event.append(_str)
+                    except Exception as e:
+                        print(f, 'public_event')
+                        print(e)
+                        print(_str_b)
+                        return
+                    _p += _len
+                else:
+                    _p += 1
+        ans = name + event + public_event + system + skills + weapons + items + armors
+        save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
+
+    def output():
+        '''
+        文本code：3B 39 08 3B 3A 69 00 3B 31 69 02 91 01 3B 32 5B 06 49 22 
+        公共事件code：3B 0B 08 3B 0C 69 00 3B 0D 69 02 91 01 3B 0E 5B 06 49 22
+        人名code: 3B 06 49 22
+        '''
+        def get_text(data:bytearray, _len, to:list):
+            ...
+        file_all = os.listdir('input')
+        jp_chs = open_json('intermediate_file/jp_chs.json')
+        failed = []
+        cnt = 0
+        
+        for f in file_all:
+            _data = open_file_b(f'input/{f}')
+            _data = bytearray(_data)
+            _p = 0
+            if f == 'System.rvdata2':
+                while _p < len(_data):
+                    if _data[_p] == 0x22:
+                        _p += 1
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                if _str and _str in jp_chs and jp_chs[_str]:
+                                    _new_str = jp_chs[_str]
+                                    _new_str = _new_str.replace('\\n', '\n')
+                                    _new_str = _new_str.replace('\\r', '\r')
+                                    _new_str = _new_str.encode('utf8')
+                                    _data[_p:_p+_len-5] = _new_str
+                                    _data[_p-1] = len(_new_str)+5
+                                    _len = len(_new_str)+5
+                                    cnt += 1
+                                else:
+                                    failed.append(_str)
+                        except Exception as e:
+                            print(f, 'system')
+                            print(e)
+                            print(_str_b)
+                        _p += _len
+                    else:
+                        _p += 1
+            elif f == 'Skills.rvdata2':
+                while _p < len(_data):
+                    if _data[_p] == 0x49 and _data[_p:_p+2] == b'\x49\x22':
+                        _p += 2
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                if _str and _str in jp_chs and jp_chs[_str]:
+                                    _new_str = jp_chs[_str]
+                                    _new_str = _new_str.replace('\\n', '\n')
+                                    _new_str = _new_str.replace('\\r', '\r')
+                                    _new_str = _new_str.encode('utf8')
+                                    _data[_p:_p+_len-5] = _new_str
+                                    _data[_p-1] = len(_new_str)+5
+                                    _len = len(_new_str)+5
+                                    cnt += 1
+                                else:
+                                    failed.append(_str)
+                        except Exception as e:
+                            print(f, 'skills')
+                            print(e)
+                            print(_str_b)
+                        _p += _len
+                    else:
+                        _p += 1
+            elif f == 'Armors.rvdata2':
+                while _p < len(_data):
+                    if _data[_p] == 0x49 and _data[_p:_p+2] == b'\x49\x22':
+                        _p += 2
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                if _str and _str in jp_chs and jp_chs[_str]:
+                                    _new_str = jp_chs[_str]
+                                    _new_str = _new_str.replace('\\n', '\n')
+                                    _new_str = _new_str.replace('\\r', '\r')
+                                    _new_str = _new_str.encode('utf8')
+                                    _data[_p:_p+_len-5] = _new_str
+                                    _data[_p-1] = len(_new_str)+5
+                                    _len = len(_new_str)+5
+                                    cnt += 1
+                                else:
+                                    failed.append(_str)
+                        except Exception as e:
+                            print(f, 'armors')
+                            print(e)
+                            print(_str_b)
+                        _p += _len
+                    else:
+                        _p += 1
+            elif f == 'Actors.rvdata2':
+                while _p < len(_data):
+                    if _data[_p] == 0x49 and _data[_p:_p+0x2] == b'\x49\x22':
+                        _p += 0x2
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                if _str and _str in jp_chs and jp_chs[_str]:
+                                    _new_str = jp_chs[_str].encode('utf8')
+                                    _data[_p:_p+_len-5] = _new_str
+                                    _data[_p-1] = len(_new_str)+5
+                                    _len = len(_new_str)+5
+                                    cnt += 1
+                                else:
+                                    failed.append(_str)
+                        except Exception as e:
+                            print(f, 'name')
+                            print(e)
+                            print(_str_b)
+                        _p += _len
+                    else:
+                        _p += 1
+            elif f == 'Weapons.rvdata2':
+                while _p < len(_data):
+                    if _data[_p] == 0x49 and _data[_p:_p+2] == b'\x49\x22':
+                        _p += 2
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                if _str and _str in jp_chs and jp_chs[_str]:
+                                    _new_str = jp_chs[_str]
+                                    _new_str = _new_str.replace('\\n', '\n')
+                                    _new_str = _new_str.replace('\\r', '\r')
+                                    _new_str = _new_str.encode('utf8')
+                                    _data[_p:_p+_len-5] = _new_str
+                                    _data[_p-1] = len(_new_str)+5
+                                    _len = len(_new_str)+5
+                                    cnt += 1
+                                else:
+                                    failed.append(_str)
+                        except Exception as e:
+                            print(f, 'weapons')
+                            print(e)
+                            print(_str_b)
+                        _p += _len
+                    else:
+                        _p += 1
+            elif f == 'Items.rvdata2':
+                while _p < len(_data):
+                    if _data[_p] == 0x49 and _data[_p:_p+2] == b'\x49\x22':
+                        _p += 2
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                if _str and _str in jp_chs and jp_chs[_str]:
+                                    _new_str = jp_chs[_str]
+                                    _new_str = _new_str.replace('\\n', '\n')
+                                    _new_str = _new_str.replace('\\r', '\r')
+                                    _new_str = _new_str.encode('utf8')
+                                    _data[_p:_p+_len-5] = _new_str
+                                    _data[_p-1] = len(_new_str)+5
+                                    _len = len(_new_str)+5
+                                    cnt += 1
+                                else:
+                                    failed.append(_str)
+                        except Exception as e:
+                            print(f, 'items')
+                            print(e)
+                            print(_str_b)
+                        _p += _len
+                    else:
+                        _p += 1
+            else:
+                while _p < len(_data):
+                    if _data[_p] == 0x3B and _data[_p:_p+0x13] == b'\x3B\x39\x08\x3B\x3A\x69\x00\x3B\x31\x69\x02\x91\x01\x3B\x32\x5B\x06\x49\x22':
+                        _p += 0x13
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                if _str and _str in jp_chs and jp_chs[_str]:
+                                    _new_str = jp_chs[_str]
+                                    _new_str = _new_str.replace('\\n', '\n')
+                                    _new_str = _new_str.replace('\\r', '\r')
+                                    _new_str = _new_str.encode('utf8')
+                                    _data[_p:_p+_len-5] = _new_str
+                                    _data[_p-1] = len(_new_str)+5
+                                    _len = len(_new_str)+5
+                                    cnt += 1
+                                else:
+                                    failed.append(_str)
+                        except Exception as e:
+                            print(f, 'event')
+                            print(e)
+                            print(_str_b)
+                            return
+                        _p += _len
+                    elif _data[_p] == 0x3B and _data[_p:_p+0x13] == b'\x3B\x0B\x08\x3B\x0C\x69\x00\x3B\x0D\x69\x02\x91\x01\x3B\x0E\x5B\x06\x49\x22':
+                        _p += 0x13
+                        _len = _data[_p]
+                        _p += 1
+                        _str_b = _data[_p:_p+_len]
+                        try:
+                            _str = _str_b[:-5].decode('utf8')
+                            if has_jp(_str):
+                                _str = _str.replace('\n', '\\n')
+                                _str = _str.replace('\r', '\\r')
+                                if _str and _str in jp_chs and jp_chs[_str]:
+                                    _new_str = jp_chs[_str]
+                                    _new_str = _new_str.replace('\\n', '\n')
+                                    _new_str = _new_str.replace('\\r', '\r')
+                                    _new_str = _new_str.encode('utf8')
+                                    _data[_p:_p+_len-5] = _new_str
+                                    _data[_p-1] = len(_new_str)+5
+                                    _len = len(_new_str)+5
+                                    cnt += 1
+                                else:
+                                    failed.append(_str)
+                        except Exception as e:
+                            print(f, 'public_event')
+                            print(e)
+                            print(_str_b)
+                            return
+                        _p += _len
+                    else:
+                        _p += 1
+            save_file_b(f"output/{f}", _data)
+        print('替换：', cnt)
+        print('失败：', len(failed))
+        save_file('intermediate_file/failed.txt', '\n'.join(failed))
+
+
