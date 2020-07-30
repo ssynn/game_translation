@@ -8,7 +8,6 @@ import random
 import base64
 import scr.langconv as lc
 import matplotlib.pyplot as plt
-# from Crypto.Cipher import AES
 from struct import unpack
 from pdb import set_trace as int3
 from scr.baidufanyi import translate as baidu_t
@@ -1411,8 +1410,9 @@ class LIVEMAKER():
             print(f, '\t', _cnt)
         save_file('intermediate_file/jp_all.txt', '\n'.join(ans+buttons))
 
-    def _text_to_cmds(text:str, version:int, speed:bytes, name=None) -> list:
+    def _text_to_cmds(text:str, version:int, speed:bytes) -> list:
         res = []
+        # text = text.replace('―','')
         end = text[-4:]
         text = text.replace('・', '·')
         text = text.replace('♪', '')
@@ -1448,10 +1448,11 @@ class LIVEMAKER():
         failed = []
         cnt = 0
         for f in file_all:
-            print(f)
+            
             data = open_file_b(f'input/{f}')
             data = bytearray(data)
             _p = 0
+            _cnt = 0
             while _p < len(data):
                 if data[_p:_p+1] == b'T' and data[_p:_p+6] == b'TpWord':
                     _line = from_bytes(data[_p-8:_p-4])
@@ -1466,6 +1467,7 @@ class LIVEMAKER():
                     # 跳过decorators
                     _decorator_num = from_bytes(_TpWord[_pos:_pos+4])
                     _pos += 4
+                    _TDecorate0_pos = _pos
                     for _ in range(_decorator_num):
                         _pos += 0x4*4+2
                         _pos += 1 if _version < 100 else 4
@@ -1592,16 +1594,20 @@ class LIVEMAKER():
                     _start = -1
                     idx = 0
                     _new_cmds = []
+                    _text_count = 0
                     while idx < len(_cmds):
                         _cmd = _cmds[idx]
-                        if _cmd[0] == 0x1 and _start == -1:
+                        if (_cmd[0] == 0x1 or _cmd[0] == 0x7) and _start == -1:
                             _start = idx
                         elif _cmd[0] == 0x3 and _start != -1:
-                            _str = LIVEMAKER._text_from_cmds(_cmds[_start: idx+1], _version, name)
+                            _str = LIVEMAKER._text_from_cmds(_cmds[_start: idx+1], _version)
                             if _str in jp_chs and jp_chs[_str]:
-                                _new_cmd_text = LIVEMAKER._text_to_cmds(jp_chs[_str], _version, _cmds[_start][-0xA:-0x06], name)
+                                _new_text = jp_chs[_str]
+                                _text_count += len(_new_text)-4
+                                _new_cmd_text = LIVEMAKER._text_to_cmds(_new_text, _version, b'\x00\x00\x00\x00')
                                 _new_cmds += _new_cmd_text
                                 cnt += 1
+                                _cnt += 1
                             else:
                                 failed.append(_str)
                                 _new_cmds += _cmds[_start: idx+1]
@@ -1633,6 +1639,9 @@ class LIVEMAKER():
                     # 修改参数个数
                     if (_version >= 104):
                         _new_TpWord[_condition_count_pos:_condition_count_pos+4] = to_bytes(len(_new_cmds), 4)
+                    # 修改TDecorate count
+                    if _decorator_num:
+                        _new_TpWord[_TDecorate0_pos:_TDecorate0_pos+4] = to_bytes(_text_count, 4)
                     # 修改TpWord长度
                     data[_start_TpWord-4:_start_TpWord] = to_bytes(len(_new_TpWord), 4)
                     # 替换TpWord
@@ -1646,9 +1655,32 @@ class LIVEMAKER():
                     _p += len(_new_TpWord)
                     # print(_new_TpWord)
                     # return
+                # if data[_p:_p+1] == b'\x5f' and data[_p:_p+0xA] == b'\x5F\x5F\x5F\x5F\x30\x01\x00\x00\x00\x04':
+                #     _p += 0xA
+                #     _len = from_bytes(data[_p:_p+4])
+                #     _p += 4
+                #     _str = data[_p:_p+_len]
+                #     try:
+                #         if len(_str) < 40 and _str[0] != 0xD:
+                #             _str = _str.decode('cp932')
+                #             if _str in jp_chs and jp_chs[_str]:
+                #                 _new_str = jp_chs[_str].encode('gbk')
+                #                 data[_p:_p+_len] = _new_str
+                #                 _len = len(_new_str)
+                #                 data[_p-4:_p] = to_bytes(_len, 4)
+                                
+                #                 cnt += 1
+                #             else:
+                #                 failed.append(_str)
+                #     except Exception:
+                #         pass
+                #     _p += _len  
                 _p += 1
             save_file_b(f'output/{f}', data)
+            print(f, _cnt)
+        save_file('intermediate_file/failed.txt', '\n'.join(failed))
         print('替换：', cnt)
+        print('失败：', len(failed))
 
     def extract_exe(path, chinesization=True):
         '''
@@ -1672,6 +1704,11 @@ class LIVEMAKER():
             else:
                 print('汉化失败！')
         save_file_b('new_'+path, exe)
+
+    def formate(text:str, name:dict):
+        for key in name:
+            text = text.replace(key, name[key])
+        return text
 
 
 class YU_RIS():

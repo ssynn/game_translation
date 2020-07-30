@@ -38,13 +38,13 @@ if __name__ == "__main__":
     # XFL.output_gsc()
 
     # LIVEMAKER.extract()
-    # LIVEMAKER.output()
+    LIVEMAKER.output()
     # LIVEMAKER.extract_exe('全裸でヌードモデルをさせられた妻◆地獄編.exe')
 
     # NScript.extract()
     # NScript.output()
 
     # RPGMakerVX.extract()
-    RPGMakerVX.output()
+    # RPGMakerVX.output()
 
     pass
