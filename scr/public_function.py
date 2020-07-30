@@ -1067,7 +1067,7 @@ class XFL():
         patt = r'\[.*?\]|<.+?>|\|'
         return re.sub(patt, '', text)
 
-    def extract_gsc(path='input'):
+    def extract(path='input'):
         jp_all = []
         file_all = os.listdir(path)
         for f in file_all:
@@ -1097,7 +1097,7 @@ class XFL():
 
         save_file('intermediate_file/jp_all.txt', '\n'.join(jp_all))
 
-    def output_gsc(path='input', dict='intermediate_file/jp_chs.json'):
+    def output(path='input', dict='intermediate_file/jp_chs.json'):
         file_all = os.listdir(path)
         jp_chs = open_json(dict)
         for f in file_all:
@@ -1603,7 +1603,7 @@ class LIVEMAKER():
                             _str = LIVEMAKER._text_from_cmds(_cmds[_start: idx+1], _version)
                             if _str in jp_chs and jp_chs[_str]:
                                 _new_text = jp_chs[_str]
-                                _text_count += len(_new_text)-4
+                                _text_count += len(_new_text)
                                 _new_cmd_text = LIVEMAKER._text_to_cmds(_new_text, _version, b'\x00\x00\x00\x00')
                                 _new_cmds += _new_cmd_text
                                 cnt += 1
@@ -1629,6 +1629,8 @@ class LIVEMAKER():
                                     failed.append(_value)
                             _new_cmds.append(_cmd)
                         elif _cmd[0] == 0x1 and _start != -1:
+                            pass
+                        elif _cmd[0] == 0x7 and _start != -1:
                             pass
                         else:
                             _new_cmds.append(_cmd)
