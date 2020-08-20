@@ -9,7 +9,7 @@ if __name__ == "__main__":
     # MED.fix_dict()
     # MED.output()
     # MED.repack('output')
-    # MED.fix_exe('EXSTIAse09.EXE')
+    # MED.fix_exe('EXSTIA3.EXE')
 
     # ANIM.extract()
     # ANIM.output()
@@ -38,11 +38,11 @@ if __name__ == "__main__":
     # XFL.output_gsc()
 
     # LIVEMAKER.extract()
-    LIVEMAKER.output()
+    # LIVEMAKER.output()
     # LIVEMAKER.extract_exe('全裸でヌードモデルをさせられた妻◆地獄編.exe')
 
     # NScript.extract()
-    # NScript.output()
+    NScript.output()
 
     # RPGMakerVX.extract()
     # RPGMakerVX.output()

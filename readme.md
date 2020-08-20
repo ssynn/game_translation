@@ -20,13 +20,13 @@
 7. 检查是否还有没翻译的文本
 8. 创建中日对照文件在 intermediate_file/contrast.txt内
 9. 替换文本，如果是明文脚本则直接使用ipynb内的替换文本代码块替换
-   * 编译过的脚本使用public_function内部的函数抽取，参考test_py3.py
+   * 编译过的脚本使用public_function内部的函数替换，参考test_py3.py
 
 ## 支持的引擎
 * XFL
-* LIVEMAKER (即将支持)
+* LIVEMAKER (不支持选择支)
 * YU_RIS
-* PAC (有BUG)
+* PAC (不支持选择支)
 * NEKOSDK
 * SILKY
 * MED

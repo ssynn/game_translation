@@ -4,8 +4,6 @@ import re
 import json
 import chardet
 import sqlite3
-import random
-import base64
 import scr.langconv as lc
 import matplotlib.pyplot as plt
 from struct import unpack
@@ -174,22 +172,6 @@ def extract_jp(get_scenario_from_origin, encoding):
     with open('intermediate_file/jp_all.txt', 'w', encoding='utf8') as f:
         for line in jp:
             f.write(line)
-
-
-def get_text_all(encoding):
-    '''
-    从input所有文件提取所有日文，保存到intermediate_file/jp_all.text
-    '''
-    file_origial = os.listdir('input')
-    file_origial = list(map(lambda x: 'input/'+x, file_origial))
-
-    jp = []
-    for file_name in file_origial:
-        with open(file_name, 'r', encoding=encoding) as f:
-            text_t = f.readlines()
-        jp += text_t
-
-    return jp
 
 
 def get_untranslated():
@@ -418,7 +400,7 @@ def split_line(text: str) -> list:
     '''
     用正则表达式切割文本，遇到'「', '」', '…', '。', '，', '―', '”', '“', '☆', '♪', '、', '‘', '’', '』', '『', '　',
     '''
-    split_str = r'\[.*?\]|<.+?>|[a-z0-9A-Z]|,|\\n|\||「|」|…+|。|@|＠|』|『|　|―+|）|（|・|？|！|★|☆|♪|※|\\|“|”|"|\]|\[|\/|\;|【|】|:'
+    split_str = r'\[.*?\]|<.+?>|[a-z0-9A-Z]|,|\\n|\||「|」|。|@|＠|』|『|　|―+|）|（|・|？|！|★|☆|♪|※|\\|“|”|"|\]|\[|\/|\;|【|】|:'
     _text_list = re.split(split_str, text)
     _ans = []
     for i in _text_list:
@@ -527,30 +509,6 @@ def replace_all(find_text, encoding, output_encoding):
         for line in failed_text:
             f.write(line)
     print('共替换：'+str(record)+"句\n失败："+str(len(failed_text)))
-
-
-def break_line():
-    # 给名字添加换行
-    jp = open_file('intermediate_file/jp_all.txt').splitlines()
-    _name = set()
-    for line in jp:
-        if line[0] not in ('　', '「', '（'):
-            _p = 0
-            for i, ch in enumerate(line):
-                if ch in ('（', '「'):
-                    _p = i
-                    break
-            if _p < 5 and _p:
-                _name.add(line[:_p])
-    jp_chs = open_json('intermediate_file/jp_chs.json')
-    for key in jp_chs:
-        line = jp_chs[key]
-        for n in _name:
-            if line.find(n) == 0:
-                line = line.replace(n, n+'[r]')
-                jp_chs[key] = line
-                break
-    save_json('intermediate_file/jp_chs.json', jp_chs)
 
 
 def to_bytes(a: int, _len: int) -> int:
@@ -693,6 +651,9 @@ class FONT():
 
 
 class LzssCompressor():
+    '''
+    根本不能用！！
+    '''
 
     def __init__(self):
         self.frame_size = 0x1000
@@ -1057,7 +1018,12 @@ class Majiro():
 
 class XFL():
     '''
-    提取gsc文件内的文本和把翻译后的文本插入gsc文件
+    1. 将scr.xfl使用GARbro拆解
+    2. 将拆解出的文件放入input
+    3. 将output的文件放入游戏根目录scr文件夹内
+
+    EXE
+    CreateFontA 0x80 -> 0x86
     '''
     def format_xfl(text: str):
         '''
@@ -1153,10 +1119,9 @@ class XFL():
 
 class LIVEMAKER():
     '''
-    汉化EXE
+    EXE
     在GetglyphoutlineA 上面 的 createfontindirecta -> 0x86
 
-    
     def optimize_livemaker_dict():
         jp_chs = open_json('intermediate_file/jp_chs copy.json')
         jp_all = open_file('intermediate_file/jp_all.txt').splitlines()
@@ -1718,17 +1683,7 @@ class YU_RIS():
     解密ybn，提取文本，插入文本，加密ybn
     需要手动删除提取出来的无用文本
 
-    ver 290:
-    4Byte length 4Byte offset
-    1. 0x14 4c6aa 0xfa
-    2. 0x2c 4c6be 0x10e
-    3. 0x50       0x13a
-    4. 0x56       0x18a
-    5. 0x54       0x1e0
-    6. 0x22
-
-    name 
-    1. 0x08 0xab
+    
     '''
     def format_yu_ris(text: str):
         tags = re.findall(r'≪.+?≫', text)
@@ -2837,9 +2792,8 @@ class MED():
 
     def extract_med():
         '''
-        从input文件夹内的脚本文件抽取文本，放入intermediate_file/jp_all.txt
-        如果游戏可以自定义姓名，则需要将文本中的＄０进行替换，使用时只需要传入主人公的名字就可以了
-        
+        从input文件夹内的脚本文件抽取文本
+        文本自动存入intermediate_file/jp_all.txt        
         '''
         def _has_jp(line: str) -> bool:
             '''
@@ -3232,9 +3186,26 @@ class MED():
 class ANIM():
     '''
     exe需要修改
+    新版
     1. 字符范围检测 cmp   eax, 0x9F
-    2. LOGFONT 8x0h -> 86h add   CreateFontIndirectA
+    2. CreateFontIndirectA 8x0h -> 86h 
     3. 修改空格 81 40 -> A1A1 
+
+    老板
+    1. 字符范围检测 cmp   al, 0x9F
+    2.  00406F53 | 8941 18                  | mov dword ptr ds:[ecx+18],eax 
+        00406F56 | 8841 20                  | mov byte ptr ds:[ecx+20],al   
+        00406F59 | 8841 21                  | mov byte ptr ds:[ecx+21],al   
+        00406F5C | 8841 22                  | mov byte ptr ds:[ecx+22],al    
+        00406F5F | 8841 24                  | mov byte ptr ds:[ecx+24],al   
+        00406F62 | 8841 25                  | mov byte ptr ds:[ecx+25],al   
+        00406F65 | 8841 26                  | mov byte ptr ds:[ecx+26],al   
+        00406F68 | 8841 27                  | mov byte ptr ds:[ecx+27],al   
+        00406F6B | 8B81 440A0000            | mov eax,dword ptr ds:[ecx+A44]
+        00406F71 | C741 1C 90010000         | mov dword ptr ds:[ecx+1C],190 
+        00406F78 | C641 23 80               | mov byte ptr ds:[ecx+23],80    
+        00406F7C | C1E0 04                  | shl eax,4                    
+
     '''
     def switch_key(key: bytearray, ch: int):
         t = ch
@@ -3382,7 +3353,7 @@ class ANIM():
         return new_data
         # save_file_b(f'output/{os.path.split(path)[-1]}', new_data)
 
-    def output():
+    def output(insert_space = True):
         def _is_name(line: str) -> bool:
             '''
             如果含有日文文字（除日文标点）则认为传入文字含有日文, 返回true
@@ -3393,19 +3364,6 @@ class ANIM():
                 if ch in ('「', '」', '…', '。', '，', '―', '”', '“', '☆', '♪', '、', '※', '‘', '’', '』', '『', '　', '゛', '・', '▁', '★', '〜', '！', '—', '【', '】'):
                     return False
             return True
-
-        def format_vnr(buff: str):
-            buff = buff.replace('　', '')
-            buff = buff.replace('@n', '')
-            # [a-zA-Z].*?\n
-            if buff and not (buff[0] <= 'z' and buff[0] >= 'a') and not (buff[0] <= 'Z' and buff[0] >= 'A'):
-                tags = re.findall(r'@\[.*?\]', buff)
-                for tag in tags:
-                    _t = tag.find(':')
-                    name = tag[2:_t]
-                    value = tag[_t+1:-1]
-                    buff = buff.replace(tag, name) + value
-            return buff
         jp_chs = open_json('intermediate_file/jp_chs.json')
         file_all = os.listdir('input')
         cnt = 0
@@ -3431,10 +3389,10 @@ class ANIM():
                     # key = format_vnr(str_all[i])
                     key = str_all[i]
                     if key in jp_chs and jp_chs[key]:
-                        if _is_name(key):
+                        if _is_name(key) or not insert_space:
                             _t = ''
                         elif key[0] in "「（『":
-                            _t = '　　　'
+                            _t = '　　　　'
                         else:
                             _t = '　'
                         str_all[i] = _t + jp_chs[key] + _t
@@ -3471,7 +3429,7 @@ class ANIM():
 
         save_file('intermediate_file/failed.txt', '\n'.join(failed))
 
-    def format_t(buff: str):
+    def format(buff: str):
         if buff and not (buff[0] <= 'z' and buff[0] >= 'a') and not (buff[0] <= 'Z' and buff[0] >= 'A'):
             tags = re.findall(r'@\[.*?\]', buff)
             for tag in tags:
@@ -3484,25 +3442,7 @@ class ANIM():
 
 class Lilim():
     '''
-    让exe基址固定
-    createfontindirect 0x80 -> 0x86 三处最后一处决定文本
-    textouta前           cmp al, 0xa0 -> cmp al,0xfe
-    8179->A1BE
-    817A->A1BF
-    55 8B EC 83 EC 64 修改        cmp al, 0xa0 -> cmp al,0xfe
-
-    ## 搜索特征AOS2
-    1. 函数
-        1. log函数 83 E4 F8 81 EC BC 010 00
-        2. 选择支HOOK点 53 56 57 68 00 00 04 00 E8
-    2. 边界
-        1. 选择支边界检查 55 8B EC 83 EC 64
-        2. 文字边界检查 8A 03 57 33 FF 3C 81
-    3. 全局变量
-        1. 文本 下面第二个 FF D5 68 00 00 01 00 6A 08 50 FF D6
-        2. 人��� 下面  53 53 53 53 53 53 B9 02 00 00 00 E8
-        3. 选择支 上面 83 C4 08 33 C9 39 37 74
-    4. 字符集 88 5E 57 2B D0 8D 64 24 
+    
     '''
     class BitStream:
         def __init__(self, data: bytes):
@@ -3988,7 +3928,8 @@ class RPM():
 
 class NScript():
     '''
-    textouta push 0x80 -> push 0x86
+    textouta 
+    createfonta push 0x80 -> push 0x86
     '''
     def extract():
         file_all = os.listdir('input')
@@ -4010,7 +3951,7 @@ class NScript():
                 ans.append(line)
         save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
 
-    def output():
+    def output(encrypt=True):
         jp_chs = open_json('intermediate_file/jp_chs.json')
         jp = open_file('input/nscript.dat', encoding='cp932').splitlines()
         cnt = 0
@@ -4018,16 +3959,17 @@ class NScript():
         for idx, line in enumerate(jp):
             if has_jp(line) and line[0] not in '*; abcdefghijklmnopqrstuvwxyz':
                 if line in jp_chs and jp_chs[line]:
-                    jp[idx] = jp_chs[line]
+                    jp[idx] = strB2Q(jp_chs[line], '\\')
                     cnt += 1
                 else:
                     failed.append(line)
         data = bytearray('\n'.join(jp).encode('gbk', errors='ignore'))
         # data = bytearray(open_file_b('input/nscript.dat').decode('cp932').encode('gbk', errors='ignore'))
-        idx = 0
-        while idx < len(data):
-            data[idx] ^= 0x84
-            idx += 1
+        if encrypt:
+            idx = 0
+            while idx < len(data):
+                data[idx] ^= 0x84
+                idx += 1
         save_file_b('output/nscript.dat', data)
         save_file('intermediate_file/failed.txt', '\n'.join(failed))
         print('替换：', cnt)
@@ -4037,7 +3979,7 @@ class NScript():
 class RPGMakerVX():
     def extract():
         '''
-        文本code：3B 39 08 3B 3A 69 00 3B 31 69 02 91 01 3B 32 5B 06 49 22 
+        文本code：    3B 39 08 3B 3A 69 00 3B 31 69 02 91 01 3B 32 5B 06 49 22 
         公共事件code：3B 0B 08 3B 0C 69 00 3B 0D 69 02 91 01 3B 0E 5B 06 49 22
         人名code: 3B 06 49 22
         '''
@@ -4176,8 +4118,8 @@ class RPGMakerVX():
                     else:
                         _p += 1
             while _p < len(_data):
-                if _data[_p] == 0x3B and _data[_p:_p+0x13] == b'\x3B\x39\x08\x3B\x3A\x69\x00\x3B\x31\x69\x02\x91\x01\x3B\x32\x5B\x06\x49\x22':
-                    _p += 0x13
+                if _data[_p] == 0x3B and _data[_p:_p+0xc] == b'\x3B\x31\x69\x02\x91\x01\x3B\x32\x5B\x06\x49\x22':
+                    _p += 0xc
                     _len = _data[_p]
                     _p += 1
                     _str_b = _data[_p:_p+_len]
@@ -4193,8 +4135,8 @@ class RPGMakerVX():
                         print(_str_b)
                         return
                     _p += _len
-                elif _data[_p] == 0x3B and _data[_p:_p+0x13] == b'\x3B\x0B\x08\x3B\x0C\x69\x00\x3B\x0D\x69\x02\x91\x01\x3B\x0E\x5B\x06\x49\x22':
-                    _p += 0x13
+                elif _data[_p] == 0x3B and _data[_p:_p+0xc] == b'\x3B\x0D\x69\x02\x91\x01\x3B\x0E\x5B\x06\x49\x22':
+                    _p += 0xc
                     _len = _data[_p]
                     _p += 1
                     _str_b = _data[_p:_p+_len]
@@ -4217,7 +4159,7 @@ class RPGMakerVX():
 
     def output():
         '''
-        文本code：3B 39 08 3B 3A 69 00 3B 31 69 02 91 01 3B 32 5B 06 49 22 
+        文本code：3B 31 69 02 91 01 3B 32 5B 06 49 22 
         公共事件code：3B 0B 08 3B 0C 69 00 3B 0D 69 02 91 01 3B 0E 5B 06 49 22
         人名code: 3B 06 49 22
         '''
@@ -4411,8 +4353,8 @@ class RPGMakerVX():
                         _p += 1
             else:
                 while _p < len(_data):
-                    if _data[_p] == 0x3B and _data[_p:_p+0x13] == b'\x3B\x39\x08\x3B\x3A\x69\x00\x3B\x31\x69\x02\x91\x01\x3B\x32\x5B\x06\x49\x22':
-                        _p += 0x13
+                    if _data[_p] == 0x3B and _data[_p:_p+0xc] == b'\x3B\x31\x69\x02\x91\x01\x3B\x32\x5B\x06\x49\x22':
+                        _p += 0xc
                         _len = _data[_p]
                         _p += 1
                         _str_b = _data[_p:_p+_len]
@@ -4438,8 +4380,8 @@ class RPGMakerVX():
                             print(_str_b)
                             return
                         _p += _len
-                    elif _data[_p] == 0x3B and _data[_p:_p+0x13] == b'\x3B\x0B\x08\x3B\x0C\x69\x00\x3B\x0D\x69\x02\x91\x01\x3B\x0E\x5B\x06\x49\x22':
-                        _p += 0x13
+                    elif _data[_p] == 0x3B and _data[_p:_p+0xc] == b'\x3B\x0D\x69\x02\x91\x01\x3B\x0E\x5B\x06\x49\x22':
+                        _p += 0xc
                         _len = _data[_p]
                         _p += 1
                         _str_b = _data[_p:_p+_len]
