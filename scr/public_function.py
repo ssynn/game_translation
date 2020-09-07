@@ -41,13 +41,13 @@ def strB2Q(ustring, exclude=()):
     return rstring
 
 
-def convert_code(to_code: str, from_code=None):
+def convert_code(to_code: str, from_code=None, path='input'):
     '''
     把input文件夹内的所有文件编码转换到指定编码
     '''
-    file_all = os.listdir('input')
+    file_all = os.listdir(path)
     for f in file_all:
-        _data = open_file_b(f'input/{f}')
+        _data = open_file_b(f'{path}/{f}')
         if not from_code:
             _code = chardet.detect(_data)['encoding']
         else:
@@ -55,40 +55,7 @@ def convert_code(to_code: str, from_code=None):
         print(_code, f)
         _data = _data.decode(_code)
         _data = _data.encode(to_code)
-        save_file_b(f'input/{f}', _data)
-
-
-def get_scenario_from_origin_sakura(data: list):
-    '''
-    如果遇到[cn 就开始读取
-    如果开头为[则跳过
-    读取一行判断是否有[en] 或[r]
-    有[en]则结束
-    '''
-    text_all = []
-    cnt = 0
-    start = False
-    for line in data:
-        # if line[:3] == '[en' and has_jp(data[cnt-1]):
-        #     text_all.append(data[cnt-1])
-        # elif line[-4:-1] == '[r]' and has_jp(line[:-4]):
-        #     text_all.append(line[:-4]+'\n')
-        # elif line[-5:-1] == '[en]' and has_jp(line[:-5]):
-        #     text_all.append(line[:-5]+'\n')
-        if line[:3] == '[cn':
-            start = True
-            cnt += 1
-            continue
-        if line[:4] == '[en]':
-            start = False
-        if start and line[0] != '[' and line[0] != ';' and has_jp(line):
-            line = line.replace('[r]', '')
-            if line.count('[en]'):
-                start = False
-                line = line.replace('[en]', '')
-            text_all.append(line)
-        cnt += 1
-    return text_all
+        save_file_b(f'{path}/{f}', _data)
 
 
 def format_sakura(text: str):
@@ -99,51 +66,6 @@ def format_sakura(text: str):
             _value = t[_p+6:-2]
             text = text.replace(t, _value)
     return text
-
-
-def output_translated_scenrio_sakura(encoding):
-    # 输出翻译后的文件
-    with open('intermediate_file/jp_chs.json', 'r', encoding='utf8') as f:
-        jp_chs = json.loads(f.read())
-
-    record = 0                          # 替换句数
-    file_origial = os.listdir('input')  # 需替换的所有文件
-    failed_text = []                    # 替换失败的记录
-
-    for file_name in file_origial:
-        with open('input/'+file_name, 'r', encoding=encoding) as f:
-            data = f.readlines()
-        cnt = 0                         # 当前行
-        start = False
-        for line in data:
-
-            # FIXME 替换目标文本
-            if line[:3] == '[cn':
-                start = True
-                cnt += 1
-                continue
-            if line[:4] == '[en]':
-                start = False
-            if start and line[0] != '[' and has_jp(line):
-                line = line.replace('[r]', '')
-                if line.count('[en]'):
-                    start = False
-                    line = line.replace('[en]', '')
-                key = line[:-1]
-                if key in jp_chs:
-                    record += 1
-                    data[cnt] = data[cnt].replace(key, jp_chs[key])
-                else:
-                    failed_text.append(key+'\n')
-            cnt += 1
-
-        with open('output/'+file_name, 'w', encoding=encoding) as f:
-            for line in data:
-                f.write(line)
-    with open('intermediate_file/failed.txt', 'w', encoding="utf8") as f:
-        for line in failed_text:
-            f.write(line)
-    print('共替换：'+str(record)+"句\n失败："+str(len(failed_text)))
 
 
 def has_jp(line: str) -> bool:
@@ -1122,48 +1044,15 @@ class LIVEMAKER():
     EXE
     在GetglyphoutlineA 上面 的 createfontindirecta -> 0x86
 
-    def optimize_livemaker_dict():
-        jp_chs = open_json('intermediate_file/jp_chs copy.json')
-        jp_all = open_file('intermediate_file/jp_all.txt').splitlines()
-        ans = dict()
-        stack_key = ''
-        stack_value = ''
-        for line in jp_all:
-            if line[-1] != '>':
-                ans[line] = jp_chs[line]
-                continue
-            stack_key += line
-            stack_value += jp_chs[line]
-            stack_key = stack_key.replace('<PG>', '')
-            stack_key = stack_key.replace('<BR>', '')
-            stack_key = stack_key.replace('　', '')
-            stack_value = stack_value.replace('<PG>', '')
-            stack_value = stack_value.replace('<BR>', '')
-            ans[stack_key] = stack_value
-            if line[-4:] == '<PG>':
-                stack_key = ''
-                stack_value = ''
-        save_json('intermediate_file/jp_chs.json', ans)
+    选项汉化
+    ノベルシステム/■初期化.lsb
+    文字を消す,シナリオ回想,読んだ文章を飛ばす,自動テキスト送り,セーブ,ロード,オプション,読んだ文章を自動的に飛ばす,
+    テキスト速度...,自動テキスト送り時間設定...,フォント選択...,サウンドを再生する,音量調節...,BGM,効果音,セリフ,
+    MIDI出力ポート選択...,フルスクリーン,ディスプレイモード...,ゲーム終了,タイトル画面に戻る,終了
+    システム画面
 
-    def make_livemaker_dict():
-        jp_all = open_file('intermediate_file/jp_all.txt').splitlines()
-        ans = dict()
-        stack_key = ''
-        for line in jp_all:
-            stack_key += line
-            stack_key = stack_key.replace('<PG>', '')
-            stack_key = stack_key.replace('<BR>', '')
-            stack_key = stack_key.replace('　', '')
-            ans[stack_key] = ''
-
-            if line[-4:] == '<PG>':
-                stack_key = ''
-
-            line = line.replace('<PG>', '')
-            line = line.replace('<BR>', '')
-            line = line.replace('　', '')
-            ans[line] = ''
-        save_json('intermediate_file/jp_chs.json', ans)
+    标题汉化
+    live.lpb
     '''
     def _text_from_cmds(cmds, version) -> str:
         # print(cmds)
@@ -1407,7 +1296,7 @@ class LIVEMAKER():
         # raise Exception()
         return res
 
-    def output(name=None):
+    def output():
         file_all = os.listdir('input')
         jp_chs = open_json('intermediate_file/jp_chs.json')
         failed = []
@@ -1670,7 +1559,8 @@ class LIVEMAKER():
                 print('汉化成功！')
             else:
                 print('汉化失败！')
-        save_file_b('new_'+path, exe)
+        
+        save_file_b(os.path.split(path)[0]+'\\new_'+os.path.split(path)[1], exe)
 
     def formate(text:str, name:dict):
         for key in name:
@@ -2934,13 +2824,18 @@ class MED():
                             continue
                         # if name:
                         #     _str = _str.replace('＄０', name)
-                        if _str in jp_chs and jp_chs[_str]:
-                            _offset -= len(_buff)
-                            _new_bytes = jp_chs[_str].encode(
-                                'gb2312', errors='ignore')
-                            _data[_offset:_offset+len(_buff)] = _new_bytes
-                            _offset += len(_new_bytes)
-                            cnt += 1
+                        if _str in jp_chs:
+                            if jp_chs[_str]:
+                                _offset -= len(_buff)
+                                _new_bytes = jp_chs[_str].encode('gb2312', errors='ignore')
+                                _data[_offset:_offset+len(_buff)] = _new_bytes
+                                _offset += len(_new_bytes)
+                                cnt += 1
+                            else:
+                                _offset -= len(_buff)
+                                _new_bytes = _str.encode('gb2312', errors='ignore')
+                                _data[_offset:_offset+len(_buff)] = _new_bytes
+                                _offset += len(_new_bytes)
                         else:
                             failed.append(_str)
                     except Exception as e:
@@ -3032,7 +2927,7 @@ class MED():
 
     def repack(path='output'):
         '''
-        调用此函数先需要先将解包时产生的密钥填入key属性
+        
         '''
         file_index = open_json(f'intermediate_file/file_index.json')
         name_list = file_index['name_list']
@@ -3074,20 +2969,20 @@ class MED():
              b'\xB0\x86\x90', 1, 'CreateFontIndirectA Charset'),
             (b'\x70\x23\x00\x00', 0, b'\x70\x23\x00\x00',
              b'\x00\x60\x00\x00', 5, '缓冲区大小'),
-            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C', -
-             0x25, b'\xF0', b'\xFE', 1, '读取对话文字的点阵 0xF0->0xFE'),
-            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C', -
-             0x18, b'\xA0', b'\xFE', 1, '读取对话文字的点阵 0xA0->0xFE'),
-            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C', -
-             0xF, b'\xE0', b'\xFE', 1, '读取对话文字的点阵 0xE0->0xFE'),
-            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C',
-             0x13, b'\xFC', b'\xFE', 1, '读取对话文字的点阵 0xFC->0xFE'),
-            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C',
-             0x34, b'\xBD', b'\xBF', 1, '读取对话文字的点阵 0xBD->0xBF'),
-            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C',
-             0x53, b'\x3F', b'\x7F', 1, '读取对话文字的点阵 0x3F->0x7F'),
-            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C',
-             0x59, b'\xBD', b'\xBF', 1, '读取对话文字的点阵 0xBD->0xBF'),
+            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C', -0x25, 
+             b'\xF0', b'\xFE', 1, '读取对话文字的点阵 0xF0->0xFE'),
+            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C', -0x18, 
+             b'\xA0', b'\xFE', 1, '读取对话文字的点阵 0xA0->0xFE'),
+            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C', -0xF, 
+             b'\xE0', b'\xFE', 1, '读取对话文字的点阵 0xE0->0xFE'),
+            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C', 0x13, 
+             b'\xFC', b'\xFE', 1, '读取对话文字的点阵 0xFC->0xFE'),
+            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C', 0x34, 
+             b'\xBD', b'\xBF', 1, '读取对话文字的点阵 0xBD->0xBF'),
+            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C', 0x53, 
+             b'\x3F', b'\x7F', 1, '读取对话文字的点阵 0x3F->0x7F'),
+            (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C', 0x59, 
+             b'\xBD', b'\xBF', 1, '读取对话文字的点阵 0xBD->0xBF'),
             (b'\x7D\x21\x8B\x55\xFC\x83\xC2\xE0', 0x30,
              b'\xF0', b'\xFE', 1, '读取人名、log、对话框点阵 0xF0->0xFE'),
             (b'\x7D\x21\x8B\x55\xFC\x83\xC2\xE0', 0x40,
@@ -3110,12 +3005,12 @@ class MED():
              b'\x90\x90\x90', 1, '存储字体点阵的函数 0x83C2EF->0x909090'),
             (b'\x81\x7D\xC8\x00\xA0\x00\x00', 0x3E,
              b'\xBD', b'\xBF', 1, '存储字体点阵的函数 0xBD->0xBF'),
-            (b'\x75\x07\xC7\x45\xBC\xE0\x00\x00\x00',
-             0x2C, b'\xFC', b'\xFE', 1, '第二个字节的上限改为FE'),
-            (b'\x75\x07\xC7\x45\xBC\xE0\x00\x00\x00',
-             0x38, b'\xF0', b'\xF8', 1, '第一个字节的上限改为F8'),
-            (b'\x75\x07\xC7\x45\xBC\xE0\x00\x00\x00',
-             0x5, b'\xe0', b'\xa0', 1, '不跳过0xA0-0xE0'),
+            (b'\x75\x07\xC7\x45\xBC\xE0\x00\x00\x00', 0x2C, 
+             b'\xFC', b'\xFE', 1, '第二个字节的上限改为FE'),
+            (b'\x75\x07\xC7\x45\xBC\xE0\x00\x00\x00', 0x38, 
+             b'\xF0', b'\xF8', 1, '第一个字节的上限改为F8'),
+            (b'\x75\x07\xC7\x45\xBC\xE0\x00\x00\x00', 0x5, 
+             b'\xe0', b'\xa0', 1, '不跳过0xA0-0xE0'),
             (b'\x00\x83\x8D\x81\x5B\x83\x68\x00', 0, b'\x00\x83\x8D\x81\x5B\x83\x68\x00',
              b'\x00\xd4\xd8\xc8\xeb\x00\x00\x00', -1, '载入'),
             (b'\x00\x83\x5A\x81\x5B\x83\x75\x00', 0, b'\x00\x83\x5A\x81\x5B\x83\x75\x00',
@@ -3133,8 +3028,8 @@ class MED():
              b'\x00\xb7\xb5\xbb\xd8\xb1\xea\xcc\xe2\x00\x00\x00\x00\x00\x00\x00', -1, '返回标题'),
             (b'\x00\x8D\xC5\x91\xE5\x89\xBB\x00', 0, b'\x00\x8D\xC5\x91\xE5\x89\xBB\x00',
              b'\x00\xd7\xee\xb4\xf3\xbb\xaf\x00', -1, '最大化'),
-            (b'\x00\x83\x5E\x83\x43\x83\x67\x83\x8B\x82\xD6\x96\xDF\x82\xE8\x82\xDC\x82\xB7\x82\xA9\x81\x48\x00',
-             0, b'\x00\x83\x5E\x83\x43\x83\x67\x83\x8B\x82\xD6\x96\xDF\x82\xE8\x82\xDC\x82\xB7\x82\xA9\x81\x48\x00',
+            (b'\x00\x83\x5E\x83\x43\x83\x67\x83\x8B\x82\xD6\x96\xDF\x82\xE8\x82\xDC\x82\xB7\x82\xA9\x81\x48\x00', 0, 
+             b'\x00\x83\x5E\x83\x43\x83\x67\x83\x8B\x82\xD6\x96\xDF\x82\xE8\x82\xDC\x82\xB7\x82\xA9\x81\x48\x00',
              b'\x00\xb7\xb5\xbb\xd8\xb1\xea\xcc\xe2\xc2\xf0\xa3\xbf\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', -1, '返回标题吗？'),
             (b'\x00\x83Q\x81[\x83\x80\x82\xf0\x8fI\x97\xb9\x82\xb5\x82\xdc\x82\xb7\x82\xa9\x81H\x00', 0,
              b'\x00\x83Q\x81[\x83\x80\x82\xf0\x8fI\x97\xb9\x82\xb5\x82\xdc\x82\xb7\x82\xa9\x81H\x00',
