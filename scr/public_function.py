@@ -4,6 +4,7 @@ import re
 import json
 import chardet
 import sqlite3
+
 import scr.langconv as lc
 import matplotlib.pyplot as plt
 from struct import unpack
@@ -2156,6 +2157,17 @@ class PAC():
     '''
     拆包、解密、替换、加密、打包
     FIXME 选择支没有汉化
+
+    EXE 汉化
+    createfonta push 0x80 -> push 0x86
+    81 40 -> A1 A1
+    81 75 -> A1 B8
+    81 76 -> A1 B9
+
+
+
+    カットしない
+    一部物語をカットする
     '''
     def extract_srp():
         '''
@@ -2164,11 +2176,17 @@ class PAC():
         \\n         -> ''
         '　'        -> ''
         '''
+        def is_scenario(text:bytes):
+            for i in text:
+                if i < 0x0A:
+                    return False
+            return True
+
         file_all = os.listdir('input')
         ans = []
         for f in file_all:
-            if f[0] != '0':
-                continue
+            # if f[0] not in '0123456789':
+            #     continue
             f_data = open_file_b(f'input/{f}')
             f_data = f_data[0xc:]
             cnt = 0
@@ -2177,25 +2195,15 @@ class PAC():
                 _len = int.from_bytes(f_data[:2], byteorder='little')
                 _str = f_data[2:2+_len]
                 if _str[:2] == b'\x00\x00':
-                    _str = _str[4:].decode('cp932')
-                    # if _str.find('】,') != -1:
-                    #     _str = _str.replace('】,', '】「')
-                    #     _str += '」'
-                    #     _str = _str.replace(r'\\n', '')
+                    _str = _str[4:]
+                    if is_scenario(_str):
+                        _str = _str.decode('cp932')
+                        ans.append(_str)
+                        cnt2 += 1
+                elif _str[:6] == b'\x10\x00\x14\x00\x00\x00':
+                    _str = _str[7:].decode('cp932')
                     ans.append(_str)
                     cnt2 += 1
-                # else:
-                #     '''
-                #     ('「', '」', '』', '『', '　', '【', '】'):
-                #     '''
-                #     _s = _str
-                #     try:
-                #         _s = _s.decode('cp932')
-                #         if _s.count('「') or _s.count('）') or _s.count('」') or _s.count('（'):
-                #             ans.append(_s)
-                #             print(_s)
-                #     except Exception as e:
-                #         pass
                 f_data = f_data[2+_len:]
                 cnt += 1
             print(f, cnt, cnt2)
@@ -2216,9 +2224,9 @@ class PAC():
         failed = []
         for f in file_all:
             f_data = open_file_b(f'input/{f}')
-            if f[0] != '0':
-                save_file_b(f'output/{f}', f_data)
-                continue
+            # if f[0] != '0':
+            #     save_file_b(f'output/{f}', f_data)
+            #     continue
             f_data = open_file_b(f'input/{f}')
             ans_data = f_data[:0xc]
             f_data = f_data[0xc:]
@@ -2231,10 +2239,23 @@ class PAC():
                     key = _str[4:].decode('cp932')
                     if key in jp_chs and jp_chs[key]:
                         chs = jp_chs[key]
+                        chs = chs.replace('・', '·')
                         chs = chs.encode('gbk', errors='ignore')
-                        ans_data += int.to_bytes(len(chs)+4,
-                                                 2, byteorder='little')
+                        ans_data += to_bytes(len(chs)+4,2)
                         ans_data += _str[:4]
+                        ans_data += chs
+                        cnt += 1
+                        cnt_all += 1
+                    else:
+                        failed.append(key)
+                elif _str[:6] == b'\x10\x00\x14\x00\x00\x00':
+                    key = _str[7:].decode('cp932')
+                    if key in jp_chs and jp_chs[key]:
+                        chs = jp_chs[key]
+                        chs = chs.replace('・', '·')
+                        chs = chs.encode('gbk')
+                        ans_data += to_bytes(len(chs)+7,2)
+                        ans_data += _str[:7]
                         ans_data += chs
                         cnt += 1
                         cnt_all += 1
@@ -2278,7 +2299,7 @@ class PAC():
         data_offset = int.from_bytes(data[3:7], byteorder='little')
         # version = 2
         index_offset = 7
-        # dir_name = os.path.splitext(path)[0]
+        save_json('intermediate_file/file_info.json', {'name_length':name_length})
 
         if not os.path.exists('input'):
             os.mkdir('input')
@@ -2304,13 +2325,13 @@ class PAC():
                 _entry_data = decode_srp(_entry_data)
             save_file_b(f'input/{delete_zero(name)}', _entry_data)
 
-    def repack_pac(path='output', encode=True, name_length=0xb):
+    def repack_pac(path='output', encode=True):
         def rot_byte_r(data: bytes, count: int):
             # print(data)
             count &= 7
             return data >> count | (data << (8-count)) & 0xff
 
-        def decode_srp(data: bytes):
+        def encode_srp(data: bytes):
             # print(len(data))
             data = bytearray(data)
             record_count = int.from_bytes(data[:4], byteorder='little')
@@ -2328,6 +2349,7 @@ class PAC():
                     pos += 1
             return data
 
+        name_length = open_json('intermediate_file/file_info.json')['name_length']
         file_all = os.listdir(path)
         count = int.to_bytes(len(file_all), 2, byteorder='little')
         n_length = int.to_bytes(name_length, 1, byteorder='little')
@@ -2340,7 +2362,7 @@ class PAC():
             _entry_data = open_file_b(f'{path}/{f}')
             name = f.encode()
 
-            while len(name) < 0xb:
+            while len(name) < name_length:
                 name += b'\x00'
 
             _entry_offset = int.to_bytes(
@@ -2357,9 +2379,69 @@ class PAC():
 
             entry_all += (name+_entry_offset+_entry_size)
             if encode:
-                _entry_data = decode_srp(_entry_data)
+                _entry_data = encode_srp(_entry_data)
             data_all += _entry_data
-        save_file_b(f"{path}.pac", ans+entry_all+data_all)
+        save_file_b(f"srp_2.pac", ans+entry_all+data_all)
+
+    def format_pac(text: str, name=dict):
+        for key in name:
+            text = text.replace(key, name[key])
+        return text
+
+    def fix_exe(path):
+        '''
+        一键汉化exe
+        表格式 (特征码, 偏移, 原目标码, 替换目标码, 次数, 名称)
+        charset:  6A 01 6A 04 6A 00 6A 00
+        code page:59 89 5d 08 75 07
+                  81 40 00 00
+                  81 75 00 00
+                  81 76 00 00
+        '''
+        table = [
+            (b'\x6A\x01\x6A\x04\x6A\x00\x6A\x00', 0x9, b'\x80',
+             b'\x86', 1, 'CreateFontA Charset'),
+            (b'\x59\x89\x5d\x08\x75\x07', -0xe, b'\xe8\x95\x01',
+             b'\xb8\xa8\x03', 1, 'cpdepage'),
+            (b'\x81\x40\x00\x00', 0x0, b'\x81\x40', b'\xA1\xA1', 1, '全角空格'),
+            (b'\x81\x75\x00\x00', 0x0, b'\x81\x75', b'\xA1\xB8', 1, '全角前括号'),
+            (b'\x81\x76\x00\x00', 0x0, b'\x81\x76', b'\xA1\xB9', 1, '全角后括号')
+        ]
+        data = open_file_b(path)
+        data = bytearray(data)
+        for t in table:
+            if t[-2] == -1:
+                while True:
+                    if len(t[3]) != len(t[2]):
+                        print('元组错误：', t)
+                        return
+                    pos = data.find(t[0])
+                    if pos == -1:
+                        break
+                    pos += t[1]
+                    _len = len(t[2])
+                    if data[pos:pos+_len] != t[2]:
+                        print('目标不匹配：', data[pos:pos+_len], t)
+                        return
+                    data[pos:pos+_len] = t[3]
+                    print('替换成功：', t)
+
+            for _ in range(t[-2]):
+                if len(t[3]) != len(t[2]):
+                    print('元组错误：', t)
+                    return
+                pos = data.find(t[0])
+                if pos == -1:
+                    print('未找到：', t)
+                    return
+                pos += t[1]
+                _len = len(t[2])
+                if data[pos:pos+_len] != t[2]:
+                    print('目标不匹配：', data[pos:pos+_len], t)
+                    return
+                data[pos:pos+_len] = t[3]
+                print('替换成功：', t)
+        save_file_b('new_'+path, data)
 
 
 class NEKOSDK():

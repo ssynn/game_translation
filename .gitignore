@@ -14,6 +14,7 @@ silky_chs
 __pycache__
 test.cpp
 test.exe
+translate.ipynb
 font
 *.EXE
 *.med

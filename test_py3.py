@@ -1,9 +1,6 @@
 from scr.public_function import *
 
 if __name__ == "__main__":
-    # print(SNL._split_line('えっ！？いや、そんなつもりは‥‥ないけど。'))
-    # SNL.create_dict()
-
     # MED.unpack()
     # MED.extract_med()
     # MED.fix_dict()
@@ -18,9 +15,11 @@ if __name__ == "__main__":
     # Lilim.fix_dixt()
     # Lilim.output_hook_dict()
 
+    # PAC.unpack_pac('srp.pac')
     # PAC.extract_srp()
     # PAC.output_srp()
     # PAC.repack_pac()
+    # PAC.fix_exe('それでも妻を愛してる２_シークレットストーリー.exe')
 
     # RPM.unpack_arc()
     # RPM.repack_arc()
@@ -37,7 +36,7 @@ if __name__ == "__main__":
     # XFL.extract_gsc()
     # XFL.output_gsc()
 
-    LIVEMAKER.extract()
+    # LIVEMAKER.extract()
     # LIVEMAKER.output()
     # LIVEMAKER.extract_exe('game.exe', False)
 
@@ -47,6 +46,4 @@ if __name__ == "__main__":
     # RPGMakerVX.extract()
     # RPGMakerVX.output()
 
-
-    # convert_code('utf8',path='chs')
     pass
