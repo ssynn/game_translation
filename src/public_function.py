@@ -5,12 +5,12 @@ import json
 import chardet
 import sqlite3
 
-import scr.langconv as lc
+import src.langconv as lc
 import matplotlib.pyplot as plt
 from struct import unpack
 from pdb import set_trace as int3
-from scr.baidufanyi import translate as baidu_t
-from scr.tencentfanyi import translate as tencent_t
+from src.baidufanyi import translate as baidu_t
+from src.tencentfanyi import translate as tencent_t
 
 
 def _init_():
@@ -3050,7 +3050,7 @@ class MED():
             (b'\x8D\x45\xBC\x8B\x55\xFC\x83\xC2\x1B', -0x6, b'\x8A\x40\x1A',
              b'\xB0\x86\x90', 1, 'CreateFontIndirectA Charset'),
             (b'\x70\x23\x00\x00', 0, b'\x70\x23\x00\x00',
-             b'\x00\x60\x00\x00', 5, '缓冲区大小'),
+             b'\x00\x60\x00\x00', 4, '缓冲区大小'),
             (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C', -0x25, 
              b'\xF0', b'\xFE', 1, '读取对话文字的点阵 0xF0->0xFE'),
             (b'\x00\x00\x00\x89\x55\xF0\x83\x7D\xF0\x40\x0F\x8C', -0x18, 

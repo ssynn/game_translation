@@ -26,7 +26,7 @@
 * XFL
 * LIVEMAKER (不支持选择支)
 * YU_RIS
-* PAC (不支持选择支)
+* PAC
 * NEKOSDK
 * SILKY
 * MED

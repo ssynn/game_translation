@@ -1,4 +1,4 @@
-from scr.public_function import *
+from src.public_function import *
 
 if __name__ == "__main__":
     # MED.unpack()
@@ -6,7 +6,7 @@ if __name__ == "__main__":
     # MED.fix_dict()
     # MED.output()
     # MED.repack('output')
-    # MED.fix_exe('EXSTIA3.EXE')
+    MED.fix_exe('soretuma_ex.exe')
 
     # ANIM.extract()
     # ANIM.output()
@@ -40,8 +40,8 @@ if __name__ == "__main__":
     # LIVEMAKER.output()
     # LIVEMAKER.extract_exe('game.exe', False)
 
-    # NScript.extract()
-    # NScript.output()
+    # Nsrc.pt.extract()
+    # Nsrc.pt.output()
 
     # RPGMakerVX.extract()
     # RPGMakerVX.output()
