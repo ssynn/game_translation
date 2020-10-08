@@ -6,7 +6,7 @@ if __name__ == "__main__":
     # MED.fix_dict()
     # MED.output()
     # MED.repack('output')
-    MED.fix_exe('soretuma_ex.exe')
+    # MED.fix_exe('soretuma_ex.exe')
 
     # ANIM.extract()
     # ANIM.output()
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     # XFL.output_gsc()
 
     # LIVEMAKER.extract()
-    # LIVEMAKER.output()
+    LIVEMAKER.output(True)
     # LIVEMAKER.extract_exe('game.exe', False)
 
     # Nsrc.pt.extract()

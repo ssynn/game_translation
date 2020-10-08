@@ -1050,7 +1050,21 @@ class LIVEMAKER():
     文字を消す,シナリオ回想,読んだ文章を飛ばす,自動テキスト送り,セーブ,ロード,オプション,読んだ文章を自動的に飛ばす,
     テキスト速度...,自動テキスト送り時間設定...,フォント選択...,サウンドを再生する,音量調節...,BGM,効果音,セリフ,
     MIDI出力ポート選択...,フルスクリーン,ディスプレイモード...,ゲーム終了,タイトル画面に戻る,終了
+
+    隐藏文字,剧本回忆,跳过已读的文章,自动播放文本,保存,加载,设置,自动跳过已读的文章,文本速度...,自动文本发送时间设置...,字体选择...,播放声音,音量调节...,BGM,效果音,台词,MIDI输出端口选择...,全屏,显示模式...,游戏结束,返回标题,结束
+    
+    
     システム画面
+
+    ノベルシステム\システムメニュー\セーブ.lsb
+    番にセーブします   号栏保存
+
+    ??
+    メモ
+
+    ノベルシステム\システムメニュー\セーブメモ.lsb
+    キャンセル
+
 
     标题汉化
     live.lpb
@@ -1094,6 +1108,7 @@ class LIVEMAKER():
             data = bytearray(data)
             _p = 0
             while _p < len(data):
+                # 提取TpWord内的文字
                 if data[_p:_p+1] == b'T' and data[_p:_p+6] == b'TpWord':
                     _line = from_bytes(data[_p-8:_p-4])
                     _length_TpWord = from_bytes(data[_p-4:_p])
@@ -1231,7 +1246,7 @@ class LIVEMAKER():
                     for idx, _cmd in enumerate(_cmds):
                         if (_cmd[0] == 0x1 or _cmd[0] == 0x7) and _start == -1:
                             _start = idx
-                        if _cmd[0] == 0x3 and _start != -1:
+                        if _cmd[0] not in (0x07, 0x01) and _start != -1:
                             _str = LIVEMAKER._text_from_cmds(_cmds[_start: idx+1], _version)
                             ans.append(_str)
                             _cnt += 1
@@ -1248,6 +1263,7 @@ class LIVEMAKER():
                     
                     # print(f, 'Tpword', hex(_p), '\tline', _line, '\tcnt', len(_cmds))
                     _p += _length_TpWord
+                # 提取选择支
                 if data[_p:_p+1] == b'\x5f' and data[_p:_p+0xA] == b'\x5F\x5F\x5F\x5F\x30\x01\x00\x00\x00\x04':
                     _p += 0xA
                     _len = from_bytes(data[_p:_p+4])
@@ -1297,7 +1313,7 @@ class LIVEMAKER():
         # raise Exception()
         return res
 
-    def output():
+    def output(selection=False):
         file_all = os.listdir('input')
         jp_chs = open_json('intermediate_file/jp_chs.json')
         failed = []
@@ -1309,6 +1325,7 @@ class LIVEMAKER():
             _p = 0
             _cnt = 0
             while _p < len(data):
+                # 替换TpWord内的文字
                 if data[_p:_p+1] == b'T' and data[_p:_p+6] == b'TpWord':
                     _line = from_bytes(data[_p-8:_p-4])
                     _length_TpWord = from_bytes(data[_p-4:_p])
@@ -1454,12 +1471,12 @@ class LIVEMAKER():
                         _cmd = _cmds[idx]
                         if (_cmd[0] == 0x1 or _cmd[0] == 0x7) and _start == -1:
                             _start = idx
-                        elif _cmd[0] == 0x3 and _start != -1:
+                        elif _cmd[0] not in (0x07, 0x01) and _start != -1:
                             _str = LIVEMAKER._text_from_cmds(_cmds[_start: idx+1], _version)
                             if _str in jp_chs and jp_chs[_str]:
                                 _new_text = jp_chs[_str]
                                 _text_count += len(_new_text)
-                                _new_cmd_text = LIVEMAKER._text_to_cmds(_new_text, _version, b'\x00\x00\x00\x00')
+                                _new_cmd_text = LIVEMAKER._text_to_cmds(_new_text, _version, b'\x32\x00\x00\x00')
                                 _new_cmds += _new_cmd_text
                                 cnt += 1
                                 _cnt += 1
@@ -1512,26 +1529,27 @@ class LIVEMAKER():
                     _p += len(_new_TpWord)
                     # print(_new_TpWord)
                     # return
-                # if data[_p:_p+1] == b'\x5f' and data[_p:_p+0xA] == b'\x5F\x5F\x5F\x5F\x30\x01\x00\x00\x00\x04':
-                #     _p += 0xA
-                #     _len = from_bytes(data[_p:_p+4])
-                #     _p += 4
-                #     _str = data[_p:_p+_len]
-                #     try:
-                #         if len(_str) < 40 and _str[0] != 0xD:
-                #             _str = _str.decode('cp932')
-                #             if _str in jp_chs and jp_chs[_str]:
-                #                 _new_str = jp_chs[_str].encode('gbk')
-                #                 data[_p:_p+_len] = _new_str
-                #                 _len = len(_new_str)
-                #                 data[_p-4:_p] = to_bytes(_len, 4)
+                # 替换选择支
+                if selection and data[_p:_p+1] == b'\x5f' and data[_p:_p+0xA] == b'\x5F\x5F\x5F\x5F\x30\x01\x00\x00\x00\x04':
+                    _p += 0xA
+                    _len = from_bytes(data[_p:_p+4])
+                    _p += 4
+                    _str = data[_p:_p+_len]
+                    try:
+                        if len(_str) < 40 and _str[0] != 0xD:
+                            _str = _str.decode('cp932')
+                            if _str in jp_chs and jp_chs[_str]:
+                                _new_str = jp_chs[_str].encode('gbk')
+                                data[_p:_p+_len] = _new_str
+                                _len = len(_new_str)
+                                data[_p-4:_p] = to_bytes(_len, 4)
                                 
-                #                 cnt += 1
-                #             else:
-                #                 failed.append(_str)
-                #     except Exception:
-                #         pass
-                #     _p += _len  
+                                cnt += 1
+                            else:
+                                failed.append(_str)
+                    except Exception:
+                        pass
+                    _p += _len  
                 _p += 1
             save_file_b(f'output/{f}', data)
             print(f, _cnt)
