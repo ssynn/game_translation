@@ -4,8 +4,8 @@ if __name__ == "__main__":
     # MED.unpack()
     # MED.extract_med()
     # MED.fix_dict()
-    # MED.output()
-    # MED.repack('output')
+    MED.output()
+    MED.repack('output')
     # MED.fix_exe('soretuma_ex.exe')
 
     # ANIM.extract()
@@ -31,13 +31,13 @@ if __name__ == "__main__":
     # SILKY.output()
 
     # YU_RIS.extract_ybn()
-    # YU_RIS.output_ybn(output_all=1)
+    # YU_RIS.output_ybn(output_all=0)
     
     # XFL.extract_gsc()
     # XFL.output_gsc()
 
     # LIVEMAKER.extract()
-    LIVEMAKER.output(True)
+    # LIVEMAKER.output(True)
     # LIVEMAKER.extract_exe('game.exe', False)
 
     # Nsrc.pt.extract()

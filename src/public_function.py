@@ -323,7 +323,7 @@ def split_line(text: str) -> list:
     '''
     用正则表达式切割文本，遇到'「', '」', '…', '。', '，', '―', '”', '“', '☆', '♪', '、', '‘', '’', '』', '『', '　',
     '''
-    split_str = r'\[.*?\]|<.+?>|[a-z0-9A-Z]|,|\\n|\||「|」|。|@|＠|』|『|　|―+|）|（|・|？|！|★|☆|♪|※|\\|“|”|"|\]|\[|\/|\;|【|】|:'
+    split_str = r'\[.*?\]|<.+?>|[a-z0-9A-Z]|,|\\n|\||「|」|。|@|＠|』|『|　|―+|）|（|・|？|！|★|☆|♪|※|\\|“|”|"|\]|\[|\/|\;|【|】|:|■|→'
     _text_list = re.split(split_str, text)
     _ans = []
     for i in _text_list:
@@ -339,7 +339,7 @@ def open_json(path):
 
 def save_json(path, data):
     with open(path, 'w', encoding='utf8') as f:
-        f.write(json.dumps(data, ensure_ascii=False))
+        f.write(json.dumps(data, ensure_ascii=False, indent=4))
 
 
 def open_file(path, encoding='utf8'):
@@ -1051,8 +1051,9 @@ class LIVEMAKER():
     テキスト速度...,自動テキスト送り時間設定...,フォント選択...,サウンドを再生する,音量調節...,BGM,効果音,セリフ,
     MIDI出力ポート選択...,フルスクリーン,ディスプレイモード...,ゲーム終了,タイトル画面に戻る,終了
 
-    隐藏文字,剧本回忆,跳过已读的文章,自动播放文本,保存,加载,设置,自动跳过已读的文章,文本速度...,自动文本发送时间设置...,字体选择...,播放声音,音量调节...,BGM,效果音,台词,MIDI输出端口选择...,全屏,显示模式...,游戏结束,返回标题,结束
+    隐藏文字,剧本回忆,跳过已读的文章,自动播放文本,保存,加载,设置,自动跳过已读的文章,文本速度,自动文本发送时间设置,字体选择,播放声音,音量调节,BGM,效果音,台词,MIDI输出端口选择,全屏,游戏结束,返回标题,结束
     
+    文字を消す,シナリオ回想,読んだ文章を飛ばす,自動テキスト送り,セーブ,ロード,オプション,読んだ文章を自動的に飛ばす,テキスト速度...,自動テキスト送り時間設定...,フォント選択...,サウンドを再生する,音量調節...,BGM,効果音,セリフ,MIDI出力ポート選択...,フルスクリーン,ゲーム終了,タイトル画面に戻る,終了
     
     システム画面
 
@@ -2476,6 +2477,7 @@ class NEKOSDK():
 
         for f in file_all:
             data = open_file_b(f'input/{f}')
+            cnt = len(ans)
             p = 0
             while p < len(data):
                 if data[p:p+0xe] == b'\x5B\x83\x65\x83\x4C\x83\x58\x83\x67\x95\x5C\x8E\xA6\x5D':
@@ -2492,11 +2494,22 @@ class NEKOSDK():
                     p += 4
                     ans.append(data[p:p+_len2-1].decode('cp932'))
                     p += _len2
+                elif data[p:p+7] == b"\x91\x49\x91\xF0\x8E\x88\x0d":
+                    p -= 4
+                    _len = from_bytes(data[p:p+4])
+                    p+=12
+                    ans.append(data[p:p+_len-9].decode('cp932'))
+                    p+=_len - 8
                 p += 1
+            # print(f, len(ans)-cnt)
         save_file('intermediate_file/jp_all.txt', '\n'.join(ans))
-        jp_chs = dict()
+        if os.path.exists('intermediate_file/jp_chs.json'):
+            jp_chs = open_json('intermediate_file/jp_chs.json')
+        else:
+            jp_chs = dict()
         for i in ans:
-            jp_chs[i] = ''
+            if i not in jp_chs:
+                jp_chs[i] = ''
         save_json('intermediate_file/jp_chs.json', jp_chs)
 
     def output():
@@ -2546,6 +2559,22 @@ class NEKOSDK():
                         failed.append(_str)
                         p += _len2
                     p += 4
+                elif data[p:p+7] == b"\x91\x49\x91\xF0\x8E\x88\x0d":
+                    p -= 4
+                    len_p = p
+                    _len = from_bytes(data[p:p+4])
+                    p+=12
+                    _str = data[p:p+_len-9].decode('cp932')
+                    if _str in jp_chs and jp_chs[_str]:
+                        _str = jp_chs[_str]
+                        _str = _str.encode('gbk', errors='ignore')
+                        data[len_p:len_p+4] = to_bytes(8+len(_str), 4)
+                        cnt += 1
+                        data[p:p+_len-9] = _str
+                        p += (len(_str)+1)
+                    else:
+                        failed.append(_str)
+                        p+=_len - 8
                 p += 1
             save_file_b(f'output/{f}', data)
         print('替换：', cnt, '\n失败：', len(failed))
@@ -2927,15 +2956,18 @@ class MED():
                         if _str in jp_chs:
                             if jp_chs[_str]:
                                 _offset -= len(_buff)
+                                jp_chs[_str] = jp_chs[_str].replace('——','――')
                                 _new_bytes = jp_chs[_str].encode('gb2312', errors='ignore')
                                 _data[_offset:_offset+len(_buff)] = _new_bytes
                                 _offset += len(_new_bytes)
                                 cnt += 1
                             else:
-                                _offset -= len(_buff)
-                                _new_bytes = _str.encode('gb2312', errors='ignore')
-                                _data[_offset:_offset+len(_buff)] = _new_bytes
-                                _offset += len(_new_bytes)
+                                failed.append(_str)
+                                # 这里会将日文用GBK编码
+                                # _offset -= len(_buff)
+                                # _new_bytes = _str.encode('gb2312', errors='ignore')
+                                # _data[_offset:_offset+len(_buff)] = _new_bytes
+                                # _offset += len(_new_bytes)
                         else:
                             failed.append(_str)
                     except Exception as e:
