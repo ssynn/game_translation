@@ -139,7 +139,7 @@ def create_dict(extract_jp_line):
             cnt += 1
     print('添加关键字：', cnt, '条')
     with open('intermediate_file/jp_chs.json', 'w', encoding=encoding) as f:
-        f.write(json.dumps(j_c, ensure_ascii=False))
+        f.write(json.dumps(j_c, ensure_ascii=False, indent=4))
 
 
 def check_dict():
