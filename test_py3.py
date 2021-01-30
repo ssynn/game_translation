@@ -1,7 +1,7 @@
 from src.public_function import *
 
 if __name__ == "__main__":
-    MED.unpack()
+    # MED.unpack()
     # MED.extract_med()
     # MED.fix_dict()
     MED.output()

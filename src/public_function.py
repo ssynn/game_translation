@@ -9,8 +9,14 @@ import src.langconv as lc
 import matplotlib.pyplot as plt
 from struct import unpack
 from pdb import set_trace as int3
-from src.baidufanyi import translate as baidu_t
-from src.tencentfanyi import translate as tencent_t
+if os.path.exists('src/baidufanyi.py'):
+    from src.baidufanyi import translate as baidu_t
+else:
+    baidu_t = {}
+if os.path.exists('src/tencentfanyi.py'):
+    from src.tencentfanyi import translate as tencent_t
+else:
+    tencent_t = {}
 
 
 def _init_():
