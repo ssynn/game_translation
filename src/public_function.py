@@ -461,6 +461,13 @@ def delete_zero(name: bytes, encoding='utf8'):
     return name.decode(encoding)
 
 
+def to_hex(data: bytes):
+    '''
+    将字节串输出为a5 ea a5 e9 a5 af a5的格式
+    '''
+    return ' '.join([hex(x)[-2:] for x in data])
+
+
 class FONT():
     def display_fnt(path='0xB9E2.fnt'):
         data = open_file_b(path)
@@ -1598,8 +1605,6 @@ class YU_RIS():
     '''
     解密ybn，提取文本，插入文本，加密ybn
     需要手动删除提取出来的无用文本
-
-    
     '''
     def format_yu_ris(text: str):
         tags = re.findall(r'≪.+?≫', text)
@@ -1826,11 +1831,13 @@ class YU_RIS():
                                                       all_parameter[i]['char_count_32']]
                 _str = extract(all_parameter[i]['str'])
 
-                # if _str.count('「あ、いえ、ごめんなさい。'):
-                #     print(methord_code[i], _str)
+                # 这里可以用来找文本标记
+                # if _str.count('今日も外に行きま'):
+                #     print("scenario：", methord_code[i], _str)
+                
                 if header['version_32'] == 481:
                     scenario_code, button_code = 106, 44
-                elif header['version_32'] == 500:
+                elif header['version_32'] in (500, 476):
                     scenario_code, button_code = 90, 29
                 else:
                     scenario_code, button_code = 91, 29
@@ -1940,7 +1947,7 @@ class YU_RIS():
         cnt = 0
         if header['version_32'] == 481:
             scenario_code, button_code = 106, 44
-        elif header['version_32'] == 500:
+        elif header['version_32'] in (500, 476):
             scenario_code, button_code = 90, 29
         else:
             scenario_code, button_code = 91, 29
@@ -1963,7 +1970,7 @@ class YU_RIS():
                     failed.append(_key)
             _key = _extract_button(_para['str'])
             if _key and methord_code[i] == button_code:
-                if _key in jp_chs and jp_chs[_key]:
+                if _key != 'サキ' and _key in jp_chs and jp_chs[_key]:
                     _str = b'\x22' + \
                         jp_chs[_key].encode('gbk', errors='ignore')+b'\x22'
                     _para['str'] = b'\x4d' + to_bytes(len(_str), 2)
@@ -2163,6 +2170,9 @@ class YU_RIS():
                 print(f, "替换：", _t[1])
                 if not os.path.exists(output):
                     os.mkdir(output)
+                # if version == 476:
+                #     data = bytearray(data)
+                #     data[4:6] = to_bytes(479,2)
                 save_file_b(f'{output}/{f}', data)
         save_file('intermediate_file/failed.txt', '\n'.join(failed))
         print('失败：', len(failed))
@@ -2781,6 +2791,48 @@ class MED():
     ^([fbps]|CH|#|[0-9]).+\n
     '''
     # key = b'\xd0\xcd\xce\xc9\x9b\x88\x8d\x8c\x97\x9f\xcd\x94\x8b\x8d\x8c\x9b\x8e\x97\x8d\x9b'
+    def extract_med_by_file():
+        '''
+        从input文件夹内的脚本文件抽取文本
+        文本自动存入intermediate_file/jp_all.txt        
+        '''
+        def _has_jp(line: str) -> bool:
+            '''
+            如果含有日文文字（除日文标点）则认为传入文字含有日文, 返回true
+            '''
+            for ch in line:
+                if ('\u0800' <= ch and ch <= '\u9fa5') or ('\uff01' <= ch <= '\uff5e'):
+                    return True
+            return False
+
+        file_all = os.listdir('input')
+        ans = []
+        for f in file_all:
+            _ans = []
+            _data = pf.open_file_b(f'input/{f}')
+            # _data = MED.decrypt(_data)
+            _offset = int.from_bytes(_data[4:8], byteorder='little') + 0x10
+            _str = _data[_offset:]
+            _buff = b''
+            for i in _str:
+                if i:
+                    _buff += pf.to_bytes(i, 1)
+                else:
+                    try:
+                        _buff = _buff.decode('cp932')
+                        if _has_jp(_buff) and _buff[0] not in ';#':
+                            # if name:
+                            #     _buff = _buff.replace('＄０', name)
+                            _ans.append(_buff)
+                    except Exception as e:
+                        print(e)
+                        print(f, _buff)
+                    _buff = b''
+            _t = {}
+            for i in _ans:
+                _t[i]=""
+            pf.save_file(f"chs/{f}", json.dumps(_t, ensure_ascii=False, indent=2))
+
     def create_talbe(target:str, chs:str):
         '''
         创建替换的行

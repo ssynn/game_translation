@@ -130,6 +130,14 @@ SHIFTJIS_CHARSET = 128
 3. 内存替换字符表
 4. 改写字符指针计算方式
 
+# RPS/YB图像
+0-2：YB
+2  ：FLAG
+3  ：BPP（Byte）
+4-8：PackedSize
+12-14：width
+14-16：height
+
 
 # .MES
 0-4 count
