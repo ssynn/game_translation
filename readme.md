@@ -40,3 +40,5 @@
 * 只测试过我玩过的游戏
 * 应该有大量的BUG
 * 代码写的很随意
+
+* 需要安装matplotlib库，命令：pip install matplotlib

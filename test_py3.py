@@ -12,7 +12,7 @@ if __name__ == "__main__":
     # ANIM.output()
 
     # Lilim.extract_for_hook_aos2()
-    # Lilim.fix_dixt()
+    # Lilim.fix_dict()
     # Lilim.output_hook_dict()
 
     # PAC.unpack_pac('srp.pac')
