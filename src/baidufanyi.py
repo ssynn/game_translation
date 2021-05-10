@@ -13,8 +13,8 @@ url = 'http://api.fanyi.baidu.com/api/trans/vip/translate' # http链接
 from_lang = 'jp'
 to_lang =  'zh'
 
-appid = '20191013000341133'
-appkey = 'j9QGaHfAKnfGtskGZcWB'
+appid = 'INPUT_YOUR_APPID' # 填入appid
+appkey = 'INPUT_YOUR_KEY' # 填入key
 
 def make_md5(s, encoding='utf-8'):
     return md5(s.encode(encoding)).hexdigest()
