@@ -9,10 +9,14 @@ import src.langconv as lc
 import matplotlib.pyplot as plt
 from struct import unpack
 from pdb import set_trace as int3
-if os.path.exists('src/baidufanyi.py'):
+
+if os.path.exists('src/baidufanyi_my.py'):
+    from src.baidufanyi_my import translate as baidu_t
+elif os.path.exists('src/baidufanyi.py'):
     from src.baidufanyi import translate as baidu_t
 else:
     baidu_t = {}
+
 if os.path.exists('src/tencentfanyi.py'):
     from src.tencentfanyi import translate as tencent_t
 else:
@@ -221,7 +225,7 @@ def _translate(text: str, db=None, delete_func=None, jp_chs=None) -> str:
     return text
 
 
-def translate(delete_func=None, interval=30):
+def translate(delete_func=None, interval=30, use_sqlite=False):
     '''
     把字典翻译
     '''
@@ -234,9 +238,12 @@ def translate(delete_func=None, interval=30):
     cnt_translate = 0
     cnt_last = 0
     failed_list = []
-    if not os.path.exists('data'):
-        os.mkdir('data')
-    conn = sqlite3.connect('data/data.db')
+    if use_sqlite:
+        if not os.path.exists('data'):
+            os.mkdir('data')
+        conn = sqlite3.connect('data/data.db')
+    else:
+        conn = None
     for key in data:
         if not data[key] or key == data[key] or has_jp(data[key]):
             ans = _translate(key, conn, delete_func, data)
@@ -251,14 +258,14 @@ def translate(delete_func=None, interval=30):
             print(cnt, '/', need_translated)
             if cnt_translate:
                 with open('intermediate_file/jp_chs.json', 'w', encoding=encoding) as f:
-                    f.write(json.dumps(data, ensure_ascii=False))
+                    f.write(json.dumps(data, ensure_ascii=False, indent=4))
                 cnt_translate = 0
     else:
         if conn:
             conn.commit()
             conn.close()
         with open('intermediate_file/jp_chs.json', 'w', encoding=encoding) as f:
-            f.write(json.dumps(data, ensure_ascii=False))
+            f.write(json.dumps(data, ensure_ascii=False, indent=4))
         with open('intermediate_file/failed.txt', 'w', encoding=encoding) as f:
             for line in failed_list:
                 f.write(line+'\n')
