@@ -8,11 +8,11 @@ if __name__ == "__main__":
     # MED.repack('output')
     # MED.fix_exe('soretuma_ex.exe')
 
-    # ANIM.extract()
+    ANIM.extract()
     # ANIM.output()
 
     # Lilim.extract_for_hook_aos2()
-    # Lilim.fix_dixt()
+    # Lilim.fix_dict()
     # Lilim.output_hook_dict()
 
     # PAC.unpack_pac('srp.pac')
@@ -31,10 +31,10 @@ if __name__ == "__main__":
     # SILKY.output()
 
     # YU_RIS.extract_ybn()
-    YU_RIS.output_ybn(output_all=True, encrypt=True)
+    # YU_RIS.output_ybn(output_all=True, encrypt=True)
     
-    # XFL.extract_gsc()
-    # XFL.output_gsc()
+    # XFL.extract()
+    # XFL.output()
 
     # LIVEMAKER.extract()
     # LIVEMAKER.output(True)

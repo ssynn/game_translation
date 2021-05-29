@@ -234,6 +234,8 @@ def translate(delete_func=None, interval=30):
     cnt_translate = 0
     cnt_last = 0
     failed_list = []
+    if not os.path.exists('data'):
+        os.mkdir('data')
     conn = sqlite3.connect('data/data.db')
     for key in data:
         if not data[key] or key == data[key] or has_jp(data[key]):
@@ -252,8 +254,9 @@ def translate(delete_func=None, interval=30):
                     f.write(json.dumps(data, ensure_ascii=False))
                 cnt_translate = 0
     else:
-        conn.commit()
-        conn.close()
+        if conn:
+            conn.commit()
+            conn.close()
         with open('intermediate_file/jp_chs.json', 'w', encoding=encoding) as f:
             f.write(json.dumps(data, ensure_ascii=False))
         with open('intermediate_file/failed.txt', 'w', encoding=encoding) as f:
@@ -3272,9 +3275,9 @@ class ANIM():
     '''
     exe需要修改
     新版
-    1. 字符范围检测 cmp   eax, 0x9F
-    2. CreateFontIndirectA 8x0h -> 86h 
-    3. 修改空格 81 40 -> A1A1 
+    1. 字符范围检测 cmp  eax, 0x9F        3D 9F 00 00 00        ->    3D FE 00 00 00
+    2. CreateFontIndirectA 8x0h -> 86h   C6 81 63 06 00 00 80  ->    C6 81 63 06 00 00 86
+    3. 修改空格 81 40 -> A1A1             81 40 00 00           ->    a1 a1 00 00
 
     老板
     1. 字符范围检测 cmp   al, 0x9F
