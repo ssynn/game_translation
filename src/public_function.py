@@ -15,12 +15,12 @@ if os.path.exists('src/baidufanyi_my.py'):
 elif os.path.exists('src/baidufanyi.py'):
     from src.baidufanyi import translate as baidu_t
 else:
-    baidu_t = {}
+    baidu_t = lambda x:""
 
 if os.path.exists('src/tencentfanyi.py'):
     from src.tencentfanyi import translate as tencent_t
 else:
-    tencent_t = {}
+    tencent_t = lambda x:""
 
 
 def _init_():
@@ -3284,7 +3284,7 @@ class ANIM():
     新版
     1. 字符范围检测 cmp  eax, 0x9F        3D 9F 00 00 00        ->    3D FE 00 00 00
     2. CreateFontIndirectA 8x0h -> 86h   C6 81 63 06 00 00 80  ->    C6 81 63 06 00 00 86
-    3. 修改空格 81 40 -> A1A1             81 40 00 00           ->    a1 a1 00 00
+    3. 修改空格 81 40 -> A1A1  三处       81 40 00 00           ->    a1 a1 00 00
 
     老板
     1. 字符范围检测 cmp   al, 0x9F

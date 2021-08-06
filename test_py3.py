@@ -2,13 +2,13 @@ from src.public_function import *
 
 if __name__ == "__main__":
     # MED.unpack()
-    # MED.extract_med()
+    MED.extract_med()
     # MED.fix_dict()
     # MED.output()
     # MED.repack('output')
     # MED.fix_exe('soretuma_ex.exe')
 
-    ANIM.extract()
+    # ANIM.extract()
     # ANIM.output()
 
     # Lilim.extract_for_hook_aos2()
