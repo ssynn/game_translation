@@ -22,6 +22,7 @@ if os.path.exists('src/tencentfanyi.py'):
 else:
     tencent_t = lambda x:""
 
+import src.nekopack as nekopack
 
 def _init_():
     file_all = os.listdir()
@@ -2497,6 +2498,24 @@ class NEKOSDK():
     如果文字的结尾有\t会导致程序崩溃
     选择只在flow.pak
     '''
+
+    def unpack(path='scr.pak', output='input'):
+        if not os.path.exists(output):
+            os.mkdir(output)
+        with open(path, 'rb') as f:
+            table_size, metas = nekopack.read_meta(f)
+            for meta in metas:
+                file_name, data = nekopack.unpack_payload(f, meta)
+                save_file_b(f'{output}/{file_name}', data)
+            file_index = {"table_size": table_size, "metas": metas}
+            save_json(f'intermediate_file/file_index.json', file_index)
+
+    def repack(path='output'):
+        file_index = open_json(f'intermediate_file/file_index.json')
+        table_size, metas = file_index["table_size"], file_index["metas"]
+        metas, payloads = nekopack.replace_payloads(metas, path)
+        save_file_b('scr2.pak', nekopack.build_pak(table_size, metas, payloads))
+
     def extract_pak_txt():
         file_all = os.listdir('input')
         ans = []

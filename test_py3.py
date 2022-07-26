@@ -24,8 +24,10 @@ if __name__ == "__main__":
     # RPM.unpack_arc()
     # RPM.repack_arc()
 
+    # NEKOSDK.unpack()
     # NEKOSDK.extract_pak_txt()
     # NEKOSDK.output()
+    # NEKOSDK.repack()
 
     # SILKY.extract()
     # SILKY.output()
